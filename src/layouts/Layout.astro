@@ -4,8 +4,8 @@ import CollapsibleNavigationSidebar from '@/components/Sidebar/NavigationSidebar
 import CollapsibleIntentPanel from '@/components/Sidebar/CollapsibleIntentPanel';
 import StatusBar from '@/components/StatusBar.tsx';
 import GlobalToaster from '@/components/GlobalToaster.tsx';
-// import VoiceAgentClientWrapper from '@/components/VoiceAgentClientWrapper.tsx';
 import BoltBadge from '@/components/BoltBadge.tsx';
+import MobileNavBar from '@/components/Mobile/MobileNavBar.tsx';
 import '@/index.css';
 
 export interface Props {
@@ -22,7 +22,7 @@ const { title, description = "Advanced AI collaboration platform with geo-intell
   <head>
     <meta charset="UTF-8" />
     <meta name="description" content={description} />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>{title}</title>
     
@@ -51,7 +51,7 @@ const { title, description = "Advanced AI collaboration platform with geo-intell
       <CollapsibleNavigationSidebar client:load />
     </div>
 
-    <main class="fixed top-[60px] bottom-12 left-4 right-4 md:left-[60px] md:right-[60px]">
+    <main class="fixed top-[60px] bottom-12 left-0 right-0 md:left-[60px] md:right-[60px] px-2 md:px-4">
       <div class="h-full w-full rounded-2xl overflow-hidden">
         <slot />
       </div>
@@ -59,6 +59,11 @@ const { title, description = "Advanced AI collaboration platform with geo-intell
 
     <div class="hidden md:block">
       <CollapsibleIntentPanel client:load />
+    </div>
+
+    <!-- Mobile Navigation Bar - only visible on mobile -->
+    <div class="block md:hidden">
+      <MobileNavBar client:load />
     </div>
 
     <!-- Status Bar - with proper spacing to avoid sidebar overlap -->
@@ -71,6 +76,5 @@ const { title, description = "Advanced AI collaboration platform with geo-intell
 
     <!-- Global toast notifications -->
     <GlobalToaster client:load />
-    <!-- <VoiceAgentClientWrapper client:load />-->
   </body>
 </html>

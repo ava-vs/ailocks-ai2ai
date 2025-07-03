@@ -6,7 +6,6 @@ import { useUserSession } from '../../hooks/useUserSession';
 import { useLocation } from '../../hooks/useLocation';
 import MessageBubble from './MessageBubble';
 import IntentPreview from './IntentPreview';
-//import type { FullAilockProfile } from '../../lib/ailock/shared';
 import LevelUpModal from '../Ailock/LevelUpModal';
 import { searchIntents } from '../../lib/api';
 import toast from 'react-hot-toast';
@@ -14,6 +13,7 @@ import IntentDetailModal from './IntentDetailModal';
 import AuthModal from '../Auth/AuthModal';
 import VoiceAgentWidget from '../VoiceAgentWidget';
 import { useAilock } from '../../hooks/useAilock';
+import MobileChatControls from '../Mobile/MobileChatControls';
 
 interface Message {
   id: string;
@@ -739,8 +739,6 @@ export default function ChatInterface() {
     }
   };
 
-  // Removed unused getActionIcon function
-
   const isPersistentSession = sessionId && !sessionId.startsWith('local-') && !sessionId.startsWith('fallback-');
 
   // Show chat history message for 3 seconds when session becomes persistent
@@ -876,193 +874,168 @@ export default function ChatInterface() {
   return (
     <div className="relative flex flex-col h-full bg-slate-900/95 rounded-2xl border border-slate-700/50 shadow-2xl overflow-hidden">
       <VoiceAgentWidget />
-      <div className="h-full flex bg-slate-900/90 text-white">
-        {/* Left Panel: Avatar */}
-        <div className="w-[320px] flex-shrink-0 flex items-center justify-center p-6 border-r border-slate-700/50">
-          <div className={`flex flex-col items-center gap-4 p-6 rounded-2xl border-2 shadow-lg transition-all duration-300 ${getAvatarBorderColor()}`}>
-            <div className="relative w-32 h-32">
-              {voiceState === 'listening' && (
-                <>
-                  <div className="absolute inset-0 border-2 border-red-400/40 rounded-full animate-ping" style={{animationDuration: '1s'}}></div>
-                  <div className="absolute inset-0 scale-125 border border-red-300/30 rounded-full animate-ping" style={{animationDuration: '1.5s', animationDelay: '0.2s'}}></div>
-                </>
-              )}
-              {voiceState === 'processing' && (
-                <div className="absolute inset-0 border-2 border-yellow-400/40 rounded-full animate-spin"></div>
-              )}
-              {voiceState === 'speaking' && (
-                <div className="absolute inset-0 border-2 border-green-400/40 rounded-full animate-pulse"></div>
-              )}
-              <img 
-                src="/images/ailock-character.png" 
-                alt="Ailock AI Assistant"
-                className={`w-full h-full object-contain drop-shadow-2xl animate-float cursor-pointer z-10 transition-transform ${
-                  voiceState !== 'idle' ? 'scale-110' : 'hover:scale-105'
-                }`}
-                style={{
-                  filter: 'drop-shadow(0 0 20px rgba(74, 158, 255, 0.3))',
-                  border: 'none',
-                  outline: 'none'
-                }}
-                onClick={handleVoiceClick}
-              />
-            </div>
-            <div className="h-5 text-center">
-              <span className="text-xs text-gray-400">
-                {voiceState === 'idle' && 'Click me to speak'}
-                {voiceState === 'listening' && '🔴 Listening...'}
-                {voiceState === 'processing' && '⚡ Processing...'}
-                {voiceState === 'speaking' && '🗣️ Speaking...'}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Panel: Chat */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto min-h-0 p-6">
-            {messages.length === 0 ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="max-w-md text-center">
-                  <h1 className="text-4xl font-bold mb-4 text-white">
-                    {getWelcomeText().welcome}
-                  </h1>
-                  <p className="text-gray-300 mb-2 text-lg">
-                    I'm here to help you in <span className="text-blue-400 font-medium">{mode}</span> mode.
-                  </p>
-                  <p className="text-gray-400 mb-8 text-base">
-                    {getModeDescription(mode)}
-                  </p>
+      <div className="h-full flex flex-col bg-slate-900/90 text-white">
+        {/* Messages Area */}
+        <div className="flex-1 overflow-y-auto min-h-0 p-3 md:p-6">
+          {messages.length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="max-w-md text-center px-4">
+                <div className="w-20 h-20 mx-auto mb-4">
+                  <img 
+                    src="/images/ailock-character.png" 
+                    alt="Ailock AI Assistant"
+                    className="w-full h-full object-contain drop-shadow-2xl animate-float"
+                    style={{
+                      filter: 'drop-shadow(0 0 20px rgba(74, 158, 255, 0.3))',
+                      border: 'none',
+                      outline: 'none'
+                    }}
+                  />
                 </div>
+                <h1 className="text-2xl md:text-4xl font-bold mb-4 text-white">
+                  {getWelcomeText().welcome}
+                </h1>
+                <p className="text-gray-300 mb-2 text-base md:text-lg">
+                  I'm here to help you in <span className="text-blue-400 font-medium">{mode}</span> mode.
+                </p>
+                <p className="text-gray-400 mb-8 text-sm md:text-base">
+                  {getModeDescription(mode)}
+                </p>
               </div>
-            ) : (
-              <div className="max-w-4xl mx-auto">
-                {messages.map(message => (
-                  <React.Fragment key={message.id}>
-                    <MessageBubble 
-                      message={message} 
-                      isStreaming={streamingMessageId === message.id}
-                    />
-                    {message.role === 'assistant' && message.intents && message.intents.length > 0 && (
-                      <div className="mb-6 ml-12">
-                        <div className="grid gap-4">
-                          {message.intents.map((intent: IntentCard) => (
-                            <div 
-                              key={intent.id}
-                              className="bg-gradient-to-br from-blue-500/10 to-indigo-600/10 border border-blue-500/30 rounded-xl p-4 shadow-lg transition-all"
-                            >
-                              <div className="flex items-start justify-between mb-3">
-                                <h4 className="text-white font-medium text-sm flex-1 pr-4">
-                                  {intent.title}
-                                </h4>
-                                <div className="flex items-center space-x-2 ml-2 flex-shrink-0">
-                                  <div className="flex items-center space-x-1 bg-blue-500/20 text-blue-400 px-2 py-1 rounded-lg border border-blue-500/30">
-                                    <span className="text-xs font-medium">{intent.matchScore}% match</span>
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              <p className="text-white/60 text-xs leading-relaxed mb-4">
-                                {intent.description.substring(0, 150)}{intent.description.length > 150 && '...'}
-                              </p>
-                              
-                              <div className="flex flex-wrap gap-2 mb-4">
-                                {intent.requiredSkills.slice(0, 3).map((skill) => (
-                                  <span 
-                                    key={skill}
-                                    className="bg-purple-500/20 text-purple-400 px-2 py-1 rounded-md text-xs font-medium border border-purple-500/30"
-                                  >
-                                    {skill}
-                                  </span>
-                                ))}
-                                {intent.requiredSkills.length > 3 && (
-                                  <span className="text-white/40 text-xs px-2 py-1">
-                                    +{intent.requiredSkills.length - 3} more
-                                  </span>
-                                )}
-                              </div>
-                              
-                              <div className="flex items-center justify-between text-xs">
-                                <div className="flex items-center space-x-2 text-white/50">
-                                  <MapPin className="w-3 h-3" />
-                                  <span>{intent.distance}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <button onClick={() => handleViewDetails(intent)} className="p-1.5 text-gray-300 hover:text-white hover:bg-slate-700/50 rounded-md transition-colors">
-                                    <Eye className="w-4 h-4" />
-                                  </button>
-                                  <button onClick={() => handleStartWork(intent)} className="p-1.5 text-gray-300 hover:text-white hover:bg-slate-700/50 rounded-md transition-colors">
-                                    <Plus className="w-4 h-4" />
-                                  </button>
+            </div>
+          ) : (
+            <div className="max-w-4xl mx-auto">
+              {messages.map(message => (
+                <React.Fragment key={message.id}>
+                  <MessageBubble 
+                    message={message} 
+                    isStreaming={streamingMessageId === message.id}
+                  />
+                  {message.role === 'assistant' && message.intents && message.intents.length > 0 && (
+                    <div className="mb-6 ml-12">
+                      <div className="grid gap-4">
+                        {message.intents.map((intent: IntentCard) => (
+                          <div 
+                            key={intent.id}
+                            className="bg-gradient-to-br from-blue-500/10 to-indigo-600/10 border border-blue-500/30 rounded-xl p-4 shadow-lg transition-all"
+                          >
+                            <div className="flex items-start justify-between mb-3">
+                              <h4 className="text-white font-medium text-sm flex-1 pr-4">
+                                {intent.title}
+                              </h4>
+                              <div className="flex items-center space-x-2 ml-2 flex-shrink-0">
+                                <div className="flex items-center space-x-1 bg-blue-500/20 text-blue-400 px-2 py-1 rounded-lg border border-blue-500/30">
+                                  <span className="text-xs font-medium">{intent.matchScore}% match</span>
                                 </div>
                               </div>
                             </div>
-                          ))}
-                        </div>
+                            
+                            <p className="text-white/60 text-xs leading-relaxed mb-4">
+                              {intent.description.substring(0, 150)}{intent.description.length > 150 && '...'}
+                            </p>
+                            
+                            <div className="flex flex-wrap gap-2 mb-4">
+                              {intent.requiredSkills.slice(0, 3).map((skill) => (
+                                <span 
+                                  key={skill}
+                                  className="bg-purple-500/20 text-purple-400 px-2 py-1 rounded-md text-xs font-medium border border-purple-500/30"
+                                >
+                                  {skill}
+                                </span>
+                              ))}
+                              {intent.requiredSkills.length > 3 && (
+                                <span className="text-white/40 text-xs px-2 py-1">
+                                  +{intent.requiredSkills.length - 3} more
+                                </span>
+                              )}
+                            </div>
+                            
+                            <div className="flex items-center justify-between text-xs">
+                              <div className="flex items-center space-x-2 text-white/50">
+                                <MapPin className="w-3 h-3" />
+                                <span>{intent.distance}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button onClick={() => handleViewDetails(intent)} className="p-1.5 text-gray-300 hover:text-white hover:bg-slate-700/50 rounded-md transition-colors">
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                                <button onClick={() => handleStartWork(intent)} className="p-1.5 text-gray-300 hover:text-white hover:bg-slate-700/50 rounded-md transition-colors">
+                                  <Plus className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    )}
-                  </React.Fragment>
-                ))}
-                
-                {isStreaming && !streamingMessageId && (
-                  <div className="flex items-center space-x-3 text-white/60 mb-6">
-                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg">
-                      <Bot className="w-4 h-4 text-white" />
                     </div>
-                    <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                    </div>
+                  )}
+                </React.Fragment>
+              ))}
+              
+              {isStreaming && !streamingMessageId && (
+                <div className="flex items-center space-x-3 text-white/60 mb-6">
+                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg">
+                    <Bot className="w-4 h-4 text-white" />
                   </div>
-                )}
-                <div ref={bottomOfMessagesRef} />
-              </div>
-            )}
-          </div>
-
-          {/* Unified Input Area */}
-          <div className="px-6 pb-4 pt-2 bg-gradient-to-t from-slate-800/90 via-slate-800/90 to-transparent">
-            <div className="relative max-w-5xl mx-auto">
-              <div className="relative">
-                <textarea
-                  ref={inputRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder={sessionId ? getPlaceholder() : "Initializing chat session..."}
-                  className="w-full px-6 py-6 pr-44 bg-transparent border border-blue-500/30 
-                            rounded-2xl text-white placeholder-gray-400 text-lg
-                             focus:outline-none focus:border-blue-500 focus:bg-slate-800/80 resize-none transition-all duration-300"
-                  disabled={isStreaming}
-                />
-
-                {/* INPUT ACTIONS */}
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-3">
-                  <button
-                    title="Create Intent"
-                    onClick={handleCreateIntentClick}
-                    disabled={!input.trim() && !lastUserMessage.trim()}
-                    className="flex h-8 items-center justify-center rounded-lg bg-blue-400 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <span>Create Intent</span>
-                  </button>
-                  {/* <button 
-                    className="p-3 hover:bg-slate-700/50 rounded-lg transition-colors"
-                    title="Attach file"
-                  >
-                    <Paperclip className="w-6 h-6 text-gray-400" />
-                  </button> */}
-                  <button 
-                    onClick={sendMessage}
-                    disabled={!input.trim() || isStreaming}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-400 text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={sessionId ? "Send message" : "Send message (will create session)"}
-                  >
-                    <Send className="w-4 h-4 text-white" />
-                  </button>
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  </div>
                 </div>
+              )}
+              <div ref={bottomOfMessagesRef} />
+            </div>
+          )}
+        </div>
+
+        {/* Mobile Chat Controls - only visible on mobile */}
+        <div className="md:hidden">
+          <MobileChatControls 
+            input={input}
+            setInput={setInput}
+            sendMessage={sendMessage}
+            isStreaming={isStreaming}
+            handleCreateIntentClick={handleCreateIntentClick}
+            placeholder={getPlaceholder()}
+            sessionId={sessionId}
+          />
+        </div>
+
+        {/* Desktop Input Area - hidden on mobile */}
+        <div className="hidden md:block px-6 pb-4 pt-2 bg-gradient-to-t from-slate-800/90 via-slate-800/90 to-transparent">
+          <div className="relative max-w-5xl mx-auto">
+            <div className="relative">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={sessionId ? getPlaceholder() : "Initializing chat session..."}
+                className="w-full px-6 py-6 pr-44 bg-transparent border border-blue-500/30 
+                          rounded-2xl text-white placeholder-gray-400 text-lg
+                           focus:outline-none focus:border-blue-500 focus:bg-slate-800/80 resize-none transition-all duration-300"
+                disabled={isStreaming}
+              />
+
+              {/* INPUT ACTIONS */}
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-3">
+                <button
+                  title="Create Intent"
+                  onClick={handleCreateIntentClick}
+                  disabled={!input.trim() && !lastUserMessage.trim()}
+                  className="flex h-8 items-center justify-center rounded-lg bg-blue-400 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span>Create Intent</span>
+                </button>
+                <button 
+                  onClick={sendMessage}
+                  disabled={!input.trim() || isStreaming}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-400 text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={sessionId ? "Send message" : "Send message (will create session)"}
+                >
+                  <Send className="w-4 h-4 text-white" />
+                </button>
               </div>
             </div>
           </div>

@@ -57,7 +57,7 @@ export default function AilockHeaderWidget() {
 
   if (loading || !profile) {
     return (
-      <div className="flex items-center space-x-3">
+      <div className="hidden md:flex items-center space-x-3">
         <div className="w-10 h-10 bg-white/5 rounded-lg animate-pulse" />
         <div className="w-32 h-6 bg-white/5 rounded animate-pulse" />
       </div>
@@ -82,7 +82,7 @@ export default function AilockHeaderWidget() {
         <div className="relative">
           <button 
             onClick={() => setIsQuickStatusOpen(true)}
-            className="flex items-center space-x-3 hover:bg-white/10 rounded-lg p-2 transition-colors cursor-pointer border border-white/20 ailock-widget"
+            className="hidden md:flex items-center space-x-3 hover:bg-white/10 rounded-lg p-2 transition-colors cursor-pointer border border-white/20 ailock-widget"
           >
             {/* Avatar */}
             <div className="relative">

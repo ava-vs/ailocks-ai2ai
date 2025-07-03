@@ -50,7 +50,6 @@ function NavigationSidebar({ isExpanded = false }: NavigationSidebarProps) {
   return (
     <div className="flex flex-col h-full p-2 text-white">
       <nav className="flex-grow space-y-2">
-        {/* CRITICAL FIX 3: Menu Icons - Light Gradients */}
         <NavLink href="/" isExpanded={isExpanded} isActive={pathname === '/'}>
           <Home className="w-5 h-5 sidebar-icon" />
           {isExpanded && <span className="font-medium whitespace-nowrap">Home</span>}

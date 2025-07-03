@@ -14,6 +14,12 @@ export default function Header() {
   const location = useLocation();
   const [isAilockDropdownOpen, setIsAilockDropdownOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const toggleMobileNav = () => {
+    toggleMobileMenu();
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
 
   const AilockDropdown = () => (
     <div className="absolute top-full left-0 mt-2 w-72 bg-slate-800 border border-slate-700 rounded-lg shadow-lg p-4 z-20">
@@ -82,50 +88,47 @@ export default function Header() {
   return (
     <header className="fixed top-0 left-0 right-0 h-[60px] bg-slate-900/80 backdrop-blur-lg border-b border-white/10 z-30 flex items-center justify-between px-4">
       {/* Left section - Logo and Project Name */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
+        <button 
+          className="md:hidden p-2 text-white/80 hover:text-white"
+          onClick={toggleMobileNav}
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+        <div className="flex items-center gap-2">
           <img 
             src="/images/ailock-logo.png" 
             alt="Ailocks Logo" 
             className="w-8 h-8 object-contain"
           />
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-white">Ailocks</h1>
-            <span className="text-sm text-white/60">Ai2Ai Network</span>
+          <div className="flex items-center gap-1">
+            <h1 className="text-lg md:text-xl font-bold text-white">Ailocks</h1>
+            <span className="text-xs md:text-sm text-white/60 hidden sm:inline">Ai2Ai Network</span>
           </div>
         </div>
       </div>
 
-      {/* Center section - Ailock Widget */}
-      <div className="flex items-center">
+      {/* Center section - Ailock Widget (hidden on small screens) */}
+      <div className="hidden md:flex items-center">
         <AilockHeaderWidget />
       </div>
 
       {/* Right section - User Controls */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2">
         <UserHeaderInfo />
         
-        {/* <button className="flex items-center gap-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white text-sm transition-colors">
-          <Plus className="w-4 h-4" />
-          Upgrade
-        </button> */}
-
-        {/* <button className="p-2 hover:bg-white/10 rounded-lg transition-colors">
-          <Bell className="w-5 h-5 text-white/80" />
-        </button> */}
-        
-        <div className="w-px h-6 bg-white/10"></div>
+        <div className="w-px h-6 bg-white/10 hidden md:block"></div>
         
         <div className="flex items-center gap-2">
           {authUser ? (
-            <button onClick={logout} className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white text-sm transition-colors">
-              <LogOut className="w-4 h-4" />
-              {authUser.name || authUser.email}
+            <button onClick={logout} className="flex items-center gap-1 px-2 py-1 md:px-3 md:py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white text-xs md:text-sm transition-colors">
+              <LogOut className="w-3 h-3 md:w-4 md:h-4" />
+              <span className="hidden sm:inline">{authUser.name || authUser.email}</span>
             </button>
           ) : (
-            <button onClick={() => setAuthModalOpen(true)} className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white text-sm transition-colors">
-              <LogIn className="w-4 h-4" />
-              Sign In
+            <button onClick={() => setAuthModalOpen(true)} className="flex items-center gap-1 px-2 py-1 md:px-3 md:py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white text-xs md:text-sm transition-colors">
+              <LogIn className="w-3 h-3 md:w-4 md:h-4" />
+              <span className="hidden sm:inline">Sign In</span>
             </button>
           )}
         </div>

@@ -12,7 +12,7 @@ export default function BoltBadge() {
       <img 
         src="/images/bolt-badge-white.png" 
         alt="Built with Bolt.new" 
-        className="w-12 h-12 md:w-16 md:h-16"
+        className="w-10 h-10 md:w-16 md:h-16"
       />
     </a>
   );

@@ -43,7 +43,7 @@ export default function AilockQuickStatus({ isOpen, onClose, profile, onOpenFull
       <div className="fixed inset-0 z-40" onClick={onClose} />
       
       {/* Dropdown positioned below the header button */}
-      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 w-[480px] max-w-[90vw]">
+      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 w-[320px] md:w-[480px] max-w-[90vw]">
         <div className="bg-slate-800/95 backdrop-blur-xl border border-white/20 rounded-2xl p-6 shadow-2xl">
           {/* Header */}
           <div className="flex items-center justify-between mb-4">

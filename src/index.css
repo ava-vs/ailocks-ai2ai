@@ -73,6 +73,7 @@
     font-feature-settings: "rlig" 1, "calt" 1;
     font-family: "Inter", sans-serif;
     background-color: var(--primary-bg);
+    overscroll-behavior: none; /* Prevent bounce effect on iOS */
   }
 
   html {
@@ -535,4 +536,40 @@ button, input, [role="button"] {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+/* Mobile-specific styles */
+@media (max-width: 768px) {
+  /* Adjust padding for mobile */
+  .mobile-padding {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+  
+  /* Ensure buttons have proper touch targets */
+  .mobile-touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Bottom safe area for iOS */
+  .mobile-safe-bottom {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+  
+  /* Adjust font sizes for mobile */
+  .mobile-text-sm {
+    font-size: 0.875rem;
+  }
+  
+  .mobile-text-xs {
+    font-size: 0.75rem;
+  }
+}
+
+/* Fix for mobile viewport height issues */
+@supports (-webkit-touch-callout: none) {
+  .h-screen {
+    height: -webkit-fill-available;
+  }
 }
