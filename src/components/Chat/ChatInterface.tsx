@@ -880,18 +880,22 @@ export default function ChatInterface() {
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="max-w-md text-center px-4">
-                <div className="w-20 h-20 mx-auto mb-4">
+                <button 
+                  onClick={handleVoiceClick}
+                  className={`w-20 h-20 mx-auto mb-4 rounded-full transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer border-4 ${getAvatarBorderColor()}`}
+                  title="Click to activate voice agent"
+                >
                   <img 
                     src="/images/ailock-character.png" 
                     alt="Ailock AI Assistant"
-                    className="w-full h-full object-contain drop-shadow-2xl animate-float"
+                    className="w-full h-full object-contain drop-shadow-2xl animate-float rounded-full"
                     style={{
                       filter: 'drop-shadow(0 0 20px rgba(74, 158, 255, 0.3))',
                       border: 'none',
                       outline: 'none'
                     }}
                   />
-                </div>
+                </button>
                 <h1 className="text-2xl md:text-4xl font-bold mb-4 text-white">
                   {getWelcomeText().welcome}
                 </h1>
