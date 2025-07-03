@@ -20,7 +20,7 @@ The platform is built on a serverless-first architecture, leveraging Netlify for
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    FRONTEND LAYER (Astro)                      │
+│                    FRONTEND LAYER (Astro)                       │
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
 │  │ Static Shell    │  │ Islands         │  │ PWA Features    │  │
@@ -30,7 +30,7 @@ The platform is built on a serverless-first architecture, leveraging Netlify for
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   NETLIFY FUNCTIONS LAYER                      │
+│                   NETLIFY FUNCTIONS LAYER                       │
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
 │  │ API Gateway     │  │ Chat Streaming  │  │ AI Pipeline     │  │
@@ -44,7 +44,7 @@ The platform is built on a serverless-first architecture, leveraging Netlify for
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                     DATA LAYER                                 │
+│                      DATA LAYER                                 │
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
 │  │ Neon PostgreSQL │  │ Netlify Blob    │  │ Redis Cache     │  │
@@ -54,7 +54,7 @@ The platform is built on a serverless-first architecture, leveraging Netlify for
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   AI & EXTERNAL SERVICES                       │
+│                    AI & EXTERNAL SERVICES                       │
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
 │  │ OpenRouter      │  │ Anthropic       │  │ Location APIs   │  │
