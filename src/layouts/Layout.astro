@@ -1,0 +1,76 @@
+---
+import Header from '@/components/Header.tsx';
+import CollapsibleNavigationSidebar from '@/components/Sidebar/NavigationSidebar';
+import CollapsibleIntentPanel from '@/components/Sidebar/CollapsibleIntentPanel';
+import StatusBar from '@/components/StatusBar.tsx';
+import GlobalToaster from '@/components/GlobalToaster.tsx';
+// import VoiceAgentClientWrapper from '@/components/VoiceAgentClientWrapper.tsx';
+import BoltBadge from '@/components/BoltBadge.tsx';
+import '@/index.css';
+
+export interface Props {
+  title: string;
+  description?: string;
+  lang?: string;
+}
+
+const { title, description = "Advanced AI collaboration platform with geo-intelligent matching, multi-model AI support, and smart chains for complex tasks.", lang = "en" } = Astro.props;
+---
+
+<!DOCTYPE html>
+<html lang={lang} class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="description" content={description} />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title}</title>
+    
+    <!-- OpenGraph / Social Media -->
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/og-image.jpg" />
+    
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    
+    <!-- Preconnect to external domains -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    
+    <!-- Additional head content -->
+    <slot name="head" />
+  </head>
+  <body class="bg-[#0B1426] text-foreground overflow-hidden h-screen">
+    <Header client:load />
+
+    <div class="hidden md:block">
+      <CollapsibleNavigationSidebar client:load />
+    </div>
+
+    <main class="fixed top-[60px] bottom-12 left-4 right-4 md:left-[60px] md:right-[60px]">
+      <div class="h-full w-full rounded-2xl overflow-hidden">
+        <slot />
+      </div>
+    </main>
+
+    <div class="hidden md:block">
+      <CollapsibleIntentPanel client:load />
+    </div>
+
+    <!-- Status Bar - with proper spacing to avoid sidebar overlap -->
+    <div class="fixed bottom-4 left-4 right-4 md:left-20 md:right-20">
+      <StatusBar client:load />
+    </div>
+
+    <!-- Bolt Badge -->
+    <BoltBadge client:load />
+
+    <!-- Global toast notifications -->
+    <GlobalToaster client:load />
+    <!-- <VoiceAgentClientWrapper client:load />-->
+  </body>
+</html>

@@ -1,0 +1,29 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "20.13.1"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+[[edge_functions]]
+  function = "geo-detect"
+  path = "/*"
+
+[[edge_functions]]
+  function = "i18n"
+  path = "/*"
+
+[functions]
+  directory = "netlify/functions"
+
+# Environment variables needed for database
+# Set these in Netlify Dashboard > Site Settings > Environment Variables:
+# DATABASE_URL = your_neon_connection_string
+# OPENAI_API_KEY = your_openai_key
+# ANTHROPIC_API_KEY = your_anthropic_key

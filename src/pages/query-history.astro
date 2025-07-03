@@ -1,0 +1,36 @@
+---
+import Layout from '../layouts/Layout.astro';
+import QueryHistoryPage from '../components/Pages/QueryHistoryPage';
+
+// Get detected language from edge function
+const detectedLanguage = Astro.request.headers.get('X-Detected-Language') || 'en';
+
+// Get user location from edge function
+const userLocationHeader = Astro.request.headers.get('X-User-Location');
+let userLocationData = {
+  country: 'US',
+  city: 'New York',
+  timezone: 'America/New_York',
+  region: 'NY',
+  latitude: 40.7128,
+  longitude: -74.0060,
+  isDefault: true
+};
+
+if (userLocationHeader) {
+  try {
+    userLocationData = JSON.parse(userLocationHeader);
+  } catch (error) {
+    console.warn('Failed to parse user location header:', error);
+  }
+}
+---
+
+<Layout title="Query History - Ailocks">
+  <!-- Add detected language and user location as meta tags for client-side access -->
+  <meta name="detected-language" content={detectedLanguage} slot="head" />
+  <meta name="user-location" content={JSON.stringify(userLocationData)} slot="head" />
+  
+  <!-- Query History Page - React Island -->
+  <QueryHistoryPage client:load />
+</Layout>

@@ -1,0 +1,56 @@
+---
+import Layout from '../layouts/Layout.astro';
+import ChatInterface from '../components/Chat/ChatInterface';
+
+// Get detected language from edge function
+const detectedLanguage = Astro.request.headers.get('X-Detected-Language') || 'en';
+
+// Get user location from edge function
+const userLocationHeader = Astro.request.headers.get('X-User-Location');
+let userLocationData = {
+  country: 'US',
+  city: 'New York',
+  timezone: 'America/New_York',
+  region: 'NY',
+  latitude: 40.7128,
+  longitude: -74.0060,
+  isDefault: true
+};
+
+if (userLocationHeader) {
+  try {
+    userLocationData = JSON.parse(userLocationHeader);
+  } catch (error) {
+    console.warn('Failed to parse user location header:', error);
+  }
+}
+---
+
+<Layout title="Ailocks: Ai2Ai Network - AI Collaboration Platform">
+  <!-- Add detected language and user location as meta tags for client-side access -->
+  <meta name="detected-language" content={detectedLanguage} slot="head" />
+  <meta name="user-location" content={JSON.stringify(userLocationData)} slot="head" />
+  
+  <!-- Chat Interface - React Island -->
+  <ChatInterface client:load />
+</Layout>
+
+<style>
+  /* Custom scrollbar styles */
+  :global(.scrollbar-thin) {
+    scrollbar-width: thin;
+  }
+  
+  :global(.scrollbar-thumb-white\/10::-webkit-scrollbar-thumb) {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+  }
+  
+  :global(.scrollbar-track-transparent::-webkit-scrollbar-track) {
+    background-color: transparent;
+  }
+  
+  :global(.scrollbar-thin::-webkit-scrollbar) {
+    width: 6px;
+  }
+</style>

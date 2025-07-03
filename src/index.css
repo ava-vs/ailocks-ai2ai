@@ -1,0 +1,538 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --primary-bg: #0B1426;
+    --secondary-bg: #1a1f2e;  
+    --tertiary-bg: #252b3a;
+    --accent-blue: #4a9eff;
+    --gradient-start: #E4F0FE;
+    --gradient-end: #2A8ED7;
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255,255,255,0.8);
+    --border-color: rgba(255,255,255,0.1);
+
+    --background: 224 71% 4%;
+    --foreground: 213 31% 91%;
+
+    --muted: 223 47% 11%;
+    --muted-foreground: 215.4 16.3% 56.9%;
+
+    --accent: 216 34% 17%;
+    --accent-foreground: 210 40% 98%;
+
+    --popover: 224 71% 4%;
+    --popover-foreground: 215 20.2% 65.1%;
+
+    --border: 216 34% 17%;
+    --input: 216 34% 17%;
+
+    --card: transparent;
+    --card-foreground: 213 31% 91%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 1.2%;
+
+    --secondary: 222.2 47.4% 11.2%;
+    --secondary-foreground: 210 40% 98%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+
+    --ring: 216 34% 17%;
+
+    --radius: 0.75rem;
+  }
+
+  /* Enhanced ambient background glow */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: 
+      linear-gradient(135deg, transparent 0%, rgba(74, 158, 255, 0.03) 100%),
+      radial-gradient(circle at 10% 20%, rgba(74, 158, 255, 0.08) 0%, transparent 60%),
+      radial-gradient(circle at 90% 80%, rgba(74, 158, 255, 0.05) 0%, transparent 60%),
+      radial-gradient(circle at 50% 50%, rgba(74, 158, 255, 0.02) 0%, transparent 80%);
+    pointer-events: none;
+    z-index: -1;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: "Inter", sans-serif;
+    background-color: var(--primary-bg);
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  .glass-effect {
+    @apply backdrop-blur-xl bg-white/10 border border-white/20;
+  }
+
+  .gradient-text {
+    @apply bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent;
+  }
+
+  .hover-glow {
+    @apply transition-all duration-300;
+    box-shadow: 
+      0 1px 3px rgba(0, 0, 0, 0.2),
+      0 0 20px rgba(74, 158, 255, 0.05);
+  }
+
+  .hover-glow:hover {
+    box-shadow: 
+      0 1px 3px rgba(0, 0, 0, 0.2),
+      0 0 20px rgba(74, 158, 255, 0.15);
+  }
+
+  /* Glass morphism effects with correct priority */
+  .glass-morphism-dark {
+    background: rgba(26, 31, 46, 0.9) !important;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(74, 158, 255, 0.3) !important;
+    box-shadow: 
+      0 1px 3px rgba(0, 0, 0, 0.2),
+      0 0 20px rgba(74, 158, 255, 0.1);
+  }
+
+  .animate-entrance {
+    animation: slideInUp 0.6s ease-out forwards;
+  }
+
+  .animate-entrance-delay {
+    animation: slideInUp 0.6s ease-out 0.3s forwards;
+    opacity: 0;
+  }
+
+  /* FAB specific styles */
+  .fab-shadow {
+    box-shadow: 
+      0 4px 16px rgba(74, 158, 255, 0.4),
+      0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .fab-shadow:hover {
+    box-shadow: 
+      0 6px 20px rgba(74, 158, 255, 0.5),
+      0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Bottom sheet drag handle */
+  .drag-handle {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+  }
+
+  /* Notification badge pulse */
+  .notification-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  /* Status bar */
+  .status-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100vw;
+    height: 48px;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    z-index: 1000;
+  }
+
+  /* Main content */
+  .main-content {
+    min-height: calc(100vh - 60px); /* Header height */
+    padding-bottom: 48px; /* Status bar height */
+  }
+
+  /* Bottom panel */
+  .bottom-panel {
+    position: fixed !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+  
+  /* Hide the collapsed intents window at bottom */
+  .collapsed-intents-bottom {
+    display: none !important;
+  }
+
+  /* Remove any bottom floating intents panel */
+  .intents-collapsed-panel {
+    display: none !important;
+  }
+  
+  /* Main pricing container */
+  .pricing-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 12px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    justify-content: center;
+  }
+
+  /* Ensure cards don't get too wide */
+  .pricing-card {
+    max-width: 280px;
+    width: 100%;
+    background: rgba(51, 65, 85, 0.6);
+    border: 1px solid rgba(74, 158, 255, 0.2);
+    border-radius: 16px;
+    padding: 16px;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+    position: relative;
+    margin: 0 auto;
+  }
+
+  .pricing-card:hover {
+    transform: translateY(-5px);
+    border-color: rgba(74, 158, 255, 0.4);
+    box-shadow: 0 10px 40px rgba(74, 158, 255, 0.1);
+  }
+
+  /* Most Popular badge */
+  .most-popular-badge {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+  
+  /* Featured card */
+  .featured {
+    order: -1; /* Show most popular first on mobile */
+  }
+
+  /* Border gradient for buttons */
+  .border-gradient-cyan-blue {
+    border-width: 1px;
+    border-style: solid;
+    border-image: linear-gradient(to right, #38bdf8, #3b82f6) 1;
+  }
+
+  /* Subtle glow effect for buttons */
+  .glow-subtle {
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+    transition: box-shadow 0.3s ease;
+  }
+  
+  .glow-subtle:hover {
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+  }
+  
+   
+  @media (max-width: 768px) {
+    .create-intent-button {
+      padding: 0.125rem 0.375rem;
+      font-size: 0.75rem;
+    }
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out forwards;
+}
+
+@keyframes breathe {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Add animation utility classes */
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-breathe {
+  animation: breathe 2s ease-in-out infinite;
+}
+
+/* Enhanced scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(37, 43, 58, 0.5);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(74, 158, 255, 0.5);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(74, 158, 255, 0.7);
+}
+
+/* Responsive design for pricing cards */
+@media (max-width: 1200px) {
+  .pricing-container {
+    max-width: 800px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    padding: 10px;
+  }
+  
+  .pricing-card {
+    max-width: 260px;
+    padding: 14px;
+  }
+}
+
+@media (max-width: 900px) {
+  .pricing-container {
+    max-width: 700px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  
+  .pricing-card {
+    max-width: 220px;
+    padding: 12px;
+  }
+  
+  .feature-item {
+    margin-bottom: 4px;
+  }
+  
+  .current-price {
+    font-size: 1.75rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .pricing-container {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    max-width: 600px;
+    gap: 16px;
+  }
+  
+  .pricing-card {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .pricing-container {
+    grid-template-columns: 1fr;
+    max-width: 320px;
+    gap: 16px;
+  }
+  
+  .pricing-card {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .pricing-container {
+    padding: 8px;
+  }
+  
+  .pricing-card {
+    padding: 14px;
+  }
+  
+  .current-price {
+    font-size: 2rem;
+  }
+}
+
+/* Focus styles for accessibility */
+.focus-visible:focus-visible {
+  @apply outline-none ring-2 ring-blue-500/50 ring-offset-2 ring-offset-slate-900;
+}
+
+/* Smooth transitions for all interactive elements */
+button, input, [role="button"] {
+  @apply transition-all duration-200 ease-in-out;
+}
+
+/* Enhanced glass morphism effects */
+.glass-morphism {
+  background: rgba(37, 43, 58, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    0 0 20px rgba(74, 158, 255, 0.05);
+}
+
+.soft-gradient {
+  background: linear-gradient(135deg, 
+    rgba(26, 31, 46, 0.8) 0%, 
+    rgba(37, 43, 58, 0.6) 100%);
+}
+
+.subtle-glow {
+  box-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    0 0 20px rgba(74, 158, 255, 0.05);
+}
+
+/* Typography improvements */
+.text-hierarchy-1 {
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.text-hierarchy-2 {
+  font-size: 1.125rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.text-hierarchy-3 {
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+@media (min-width: 768px) {
+  .text-hierarchy-1 {
+    font-size: 2.5rem;
+  }
+  
+  .text-hierarchy-2 {
+    font-size: 1.25rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .text-hierarchy-1 {
+    font-size: 3rem;
+  }
+  
+  .text-hierarchy-2 {
+    font-size: 1.5rem;
+  }
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .mobile-safe-area {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Touch targets */
+  button, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Improved mobile typography */
+  h1 {
+    font-size: 1.5rem;
+    line-height: 1.2;
+  }
+
+  h2 {
+    font-size: 1.25rem;
+    line-height: 1.3;
+  }
+
+  p {
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+}
+
+/* Ailock widget image fixes */
+.ailock-widget img {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Left sidebar icons with gradient */
+.sidebar-icon {
+  background: linear-gradient(135deg, #E4F0FE 0%, #2A8ED7 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-size: 20px;
+  transition: all 0.3s ease;
+}
+
+.sidebar-icon:hover {
+  background: linear-gradient(135deg, #60A5FA 0%, #3B82F6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  transform: scale(1.1);
+}
+
+/* Right sidebar icons with gradient */
+.right-sidebar-icon {
+  background: linear-gradient(135deg, #E4F0FE 0%, #2A8ED7 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
