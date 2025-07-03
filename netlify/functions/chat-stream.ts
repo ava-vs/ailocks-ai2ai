@@ -117,7 +117,7 @@ export default async (request: Request) => {
 
     if (streaming) {
       // Server-Sent Events streaming response
-      const streamBody = await streamAilockResponse(message, mode, language, location, sessionId, useDatabase && !isLocalDev);
+      const streamBody = await streamAilockResponse(message, mode, language, location, sessionId, useDatabase && !isLocalDev, userId);
       return new Response(streamBody, {
         status: 200,
         headers: {
@@ -130,7 +130,7 @@ export default async (request: Request) => {
     } else {
       // Non-streaming response for compatibility
       try {
-        const ailockResponse = await processAilockRequest(message, mode, language, location);
+        const ailockResponse = await processAilockRequest(message, mode, language, location, userId);
 
         // Create assistant message
         const assistantMessage = {
@@ -229,16 +229,38 @@ async function processAilockRequest(
   userMessage: string, 
   mode: string, 
   language: string, 
-  location: any
+  location: any,
+  userId?: string
 ): Promise<{ content: string; intents: any[]; actions: any[] }> {
   
   // 1. Analyze user intent from message
   const userIntent = analyzeUserIntent(userMessage, mode, language);
   
-  // 2. Search for relevant intents in database
+  // 2. Check for Deep Research request
+  const isDeepResearchRequest = checkForDeepResearchRequest(userMessage, language);
+  
+  if (isDeepResearchRequest && userId) {
+    try {
+      const researchResult = await performDeepResearch(userMessage, userId, language);
+      return {
+        content: researchResult.content,
+        intents: [],
+        actions: researchResult.actions
+      };
+    } catch (error: any) {
+      console.warn('Deep Research failed:', error);
+      return {
+        content: error.message || 'Не удалось выполнить глубокое исследование.',
+        intents: [],
+        actions: []
+      };
+    }
+  }
+  
+  // 3. Search for relevant intents in database
   const relevantIntents = await searchRelevantIntents(userMessage, location, userIntent);
   
-  // 3. Generate Ailock response based on findings
+  // 4. Generate Ailock response based on findings
   if (relevantIntents.length > 0) {
     // Found relevant intents - present them as cards
     const response = generateIntentBasedResponse(relevantIntents, language);
@@ -264,14 +286,15 @@ async function streamAilockResponse(
   language: string,
   location: any,
   sessionId: string,
-  useDatabase: boolean
+  useDatabase: boolean,
+  userId?: string
 ): Promise<string> {
   let streamData = '';
   const assistantMessageId = `msg-${Date.now()}-ai`;
 
   try {
     // Process Ailock request
-    const ailockResponse = await processAilockRequest(userMessage, mode, language, location);
+    const ailockResponse = await processAilockRequest(userMessage, mode, language, location, userId);
     
     // Stream the response content
     const content = ailockResponse.content;
@@ -672,4 +695,114 @@ function getFallbackResponse(mode: string, language: string = 'en'): string {
   const modeResponses = responses[language as keyof typeof responses]?.[mode as keyof typeof responses.en] || responses.en.researcher;
   
   return `${modeResponses}\n\n*Note: Using offline mode - Ailock services may be temporarily unavailable.*`;
+}
+
+function checkForDeepResearchRequest(message: string, language: string): boolean {
+  const lowerMessage = message.toLowerCase();
+  
+  // Русские ключевые слова для исследования
+  const ruResearchKeywords = [
+    'исследуй', 'исследование', 'проанализируй', 'анализ', 'изучи', 'изучение',
+    'найди информацию', 'собери данные', 'глубокий анализ', 'подробно изучи',
+    'что известно о', 'расскажи подробно', 'детальный анализ'
+  ];
+  
+  // Английские ключевые слова для исследования
+  const enResearchKeywords = [
+    'research', 'analyze', 'study', 'investigate', 'deep dive',
+    'find information', 'gather data', 'comprehensive analysis',
+    'tell me about', 'what do you know about', 'detailed analysis'
+  ];
+  
+  const keywords = language === 'ru' ? ruResearchKeywords : enResearchKeywords;
+  
+  return keywords.some(keyword => lowerMessage.includes(keyword));
+}
+
+async function performDeepResearch(query: string, userId: string, language: string): Promise<{
+  content: string;
+  actions: any[];
+}> {
+  try {
+    // Внутренний API вызов к функции Deep Research
+    const baseUrl = process.env.URL || 'http://localhost:8888';
+    const researchUrl = `${baseUrl}/.netlify/functions/deep-research`;
+    
+    const response = await fetch(researchUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        query,
+        userId,
+        options: {
+          language,
+          maxSources: 5,
+          includeAcademic: true,
+          includeWeb: true,
+          researchDepth: 'comprehensive'
+        }
+      })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Research API returned ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const report = data.report;
+    
+    // Форматируем результат для чата
+    let content = `🔍 **Результаты глубокого исследования**\n\n`;
+    content += `**Запрос:** ${report.query}\n\n`;
+    content += `**Краткое резюме:**\n${report.summary}\n\n`;
+    
+    if (report.keyInsights.length > 0) {
+      content += `**Ключевые инсайты:**\n`;
+      report.keyInsights.forEach((insight: string, index: number) => {
+        content += `${index + 1}. ${insight}\n`;
+      });
+      content += '\n';
+    }
+    
+    if (report.recommendations.length > 0) {
+      content += `**Рекомендации:**\n`;
+      report.recommendations.forEach((rec: string, index: number) => {
+        content += `${index + 1}. ${rec}\n`;
+      });
+      content += '\n';
+    }
+    
+    content += `**Найдено источников:** ${report.sources.length}\n`;
+    content += `**Достоверность:** ${report.confidence}%\n\n`;
+    
+    if (report.sources.length > 0) {
+      content += `**Источники:**\n`;
+      report.sources.slice(0, 3).forEach((source: any, index: number) => {
+        content += `${index + 1}. [${source.title}](${source.url})\n`;
+        if (source.authors && source.authors.length > 0) {
+          content += `   Авторы: ${source.authors.join(', ')}\n`;
+        }
+        if (source.year) {
+          content += `   Год: ${source.year}\n`;
+        }
+        content += '\n';
+      });
+    }
+    
+    const actions = [
+      {
+        type: 'deep_research_completed',
+        label: 'Сохранить результаты исследования',
+        data: { report }
+      }
+    ];
+    
+    return { content, actions };
+    
+  } catch (error: any) {
+    throw new Error(error.message || 'Ошибка выполнения глубокого исследования');
+  }
 }

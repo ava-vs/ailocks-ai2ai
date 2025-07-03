@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Star, Settings } from 'lucide-react';
+import { Star, Settings, Mic, Square } from 'lucide-react';
 import AilockDashboard from './AilockDashboard';
 import { ailockApi } from '@/lib/ailock/api';
 import type { FullAilockProfile } from '@/lib/ailock/shared';
@@ -11,12 +11,21 @@ export default function AilockWidget() {
   const [profile, setProfile] = useState<FullAilockProfile | null>(null);
   const [isDashboardOpen, setIsDashboardOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [voiceStatus, setVoiceStatus] = useState<'idle' | 'listening' | 'speaking' | 'processing'>('idle');
 
   useEffect(() => {
     if (currentUser.id && currentUser.id !== 'loading') {
       loadProfile();
     }
   }, [currentUser.id]);
+
+  useEffect(() => {
+    const handleVoiceStatus = (e: any) => {
+      setVoiceStatus(e.detail?.status || 'idle');
+    };
+    window.addEventListener('voice-status-update', handleVoiceStatus);
+    return () => window.removeEventListener('voice-status-update', handleVoiceStatus);
+  }, []);
 
   const loadProfile = async () => {
     try {
@@ -44,6 +53,10 @@ export default function AilockWidget() {
     }
   };
 
+  const handleToggleVoiceAgent = () => {
+    window.dispatchEvent(new CustomEvent('toggle-voice-agent'));
+  };
+
   if (loading || !profile) {
     return (
       <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl p-4">
@@ -67,13 +80,22 @@ export default function AilockWidget() {
     return 'from-cyan-400 via-blue-400 to-indigo-400';
   };
 
+  const getVoiceGlow = () => {
+    switch (voiceStatus) {
+      case 'listening': return 'ring-4 ring-green-400 animate-breathe';
+      case 'speaking': return 'ring-4 ring-yellow-400 animate-breathe';
+      case 'processing': return 'ring-4 ring-purple-400 animate-breathe';
+      default: return 'ring-2 ring-blue-400';
+    }
+  };
+
   return (
     <>
       <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl p-4 hover:bg-white/10 transition-all cursor-pointer">
         <div className="flex items-center space-x-3 mb-3" onClick={() => setIsDashboardOpen(true)}>
-          {/* Avatar */}
-          <div className="relative">
-            <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${getAvatarGradient()} p-0.5`}>
+          {/* Avatar + Voice Status */}
+          <div className="relative flex items-center">
+            <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${getAvatarGradient()} p-0.5 ${getVoiceGlow()} transition-all`}>
               <div className="w-full h-full rounded-lg bg-slate-800/90 flex items-center justify-center">
                 <img 
                   src="/images/ailock-avatar.png" 
@@ -86,6 +108,14 @@ export default function AilockWidget() {
             <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
               {levelInfo.level}
             </div>
+            {/* Voice control button */}
+            <button
+              className={`ml-2 p-2 rounded-full bg-slate-700/70 hover:bg-slate-600/90 border border-slate-500/40 shadow transition-colors ${voiceStatus !== 'idle' ? 'ring-2 ring-green-400' : ''}`}
+              title={voiceStatus !== 'idle' ? 'Остановить голосовой агент' : 'Активировать голосовой агент'}
+              onClick={e => { e.stopPropagation(); handleToggleVoiceAgent(); }}
+            >
+              {voiceStatus !== 'idle' ? <Square className="w-4 h-4 text-red-400" /> : <Mic className="w-4 h-4 text-blue-400" />}
+            </button>
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="text-white font-medium text-sm truncate">{profile.name}</h3>
