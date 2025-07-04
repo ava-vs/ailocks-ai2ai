@@ -897,7 +897,7 @@ export default function ChatInterface() {
             <VoiceAgentWidget />
 
       {/* Persistent voice agent avatar (tap/click to toggle) */}
-      <div className="fixed bottom-20 left-4 z-50">
+      <div className="fixed bottom-30 left-15 z-10">
         <div 
           onClick={handleVoiceClick}
           className={`cursor-pointer transition-all duration-300 rounded-full border-2 ${getAvatarBorderColor()}`}

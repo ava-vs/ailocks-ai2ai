@@ -316,6 +316,85 @@ export default async (request: Request, context: Context) => {
 };
 ```
 
+#### **save-message – Persist Single Chat Message**
+
+> **Purpose:** Позволяет фронтенду (включая голосового агента) сохранять отдельное сообщение в историю чата, если оно уже показано в UI. Используется, когда сообщение поступает асинхронно и не проходит через `chat-stream`.
+
+```typescript
+// netlify/functions/save-message.ts
+import type { Handler } from '@netlify/functions';
+import { chatService } from '../../src/lib/chat-service';
+
+export const handler: Handler = async (event) => {
+  // CORS pre-flight
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type'
+      },
+      body: 'OK'
+    };
+  }
+
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: 'Method Not Allowed' };
+  }
+
+  try {
+    const { sessionId, message } = JSON.parse(event.body || '{}');
+
+    if (!sessionId || !message) {
+      return { statusCode: 400, body: 'sessionId and message are required' };
+    }
+
+    await chatService.saveMessage(sessionId, {
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      mode: message.mode || 'text',
+      timestamp: new Date(message.timestamp),
+      metadata: message.metadata || {}
+    });
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ status: 'saved' }),
+      headers: { 'Access-Control-Allow-Origin': '*' }
+    };
+  } catch (err: any) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: err?.message || 'Internal Error' }),
+      headers: { 'Access-Control-Allow-Origin': '*' }
+    };
+  }
+};
+```
+
+**Вызов с фронтенда**
+```javascript
+fetch('/.netlify/functions/save-message', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ sessionId, message })
+});
+```
+
+| Поле | Тип | Обязательность | Описание |
+|------|-----|----------------|----------|
+| `sessionId` | `string` | ✅ | Идентификатор текущей сессии чата (UUID). |
+| `message` | `object` | ✅ | Объект сообщения (`id`, `role`, `content`, `timestamp`, `mode`). |
+
+**Ответы**
+* `200 OK` – `{ status: "saved" }` – сообщение сохранено.
+* `400 Bad Request` – отсутствуют обязательные поля.
+* `405 Method Not Allowed` – неверный HTTP-метод.
+* `500 Internal Error` – непредвиденная ошибка на сервере.
+
+После успешного сохранения сообщение немедленно доступно через `chat-history` и участвует в генерации сводки (`chat_summaries`).
+
 ### **Enhanced Database Schema (Neon PostgreSQL)**
 
 ### **AI Assistants Ecosystem (Pica + Multi-Platform)**
