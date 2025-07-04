@@ -37,11 +37,15 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
     // Fetch the user's Ailock profile for additional context
     const ailockProfile = session.userId ? await ailockService.getOrCreateAilock(session.userId) : null;
 
+    // Fetch or create chat summary for additional context
+    const chatSummary = session.userId ? await chatService.getOrCreateSummary(session.userId) : '';
+
     // Use the LLM-based service to extract intent data
     const extractedData = await intentExtractionService.extractIntentData(
       userInput,
       session.messages,
-      ailockProfile
+      ailockProfile,
+      chatSummary
     );
 
     console.log('✅ Successfully extracted intent data for preview:', extractedData);

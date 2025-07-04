@@ -1,5 +1,5 @@
 import { db } from './db';
-import { chatSessions, users } from './schema';
+import { chatSessions, users, chatSummaries } from './schema';
 import { eq, and, desc } from 'drizzle-orm';
 import type { ChatMessage, ChatSession } from './types';
 
@@ -361,6 +361,43 @@ export class ChatService {
     } catch (error) {
       console.error('❌ Failed to cleanup old sessions:', error);
       return 0;
+    }
+  }
+
+  async getOrCreateSummary(userId: string): Promise<string> {
+    if (!userId) return '';
+
+    // Try to fetch existing summary
+    try {
+      const result = await db.select().from(chatSummaries).where(eq(chatSummaries.userId, userId));
+      if (result.length > 0 && result[0].summary) {
+        return result[0].summary as unknown as string;
+      }
+    } catch (e) {
+      console.warn('⚠️ Failed to fetch chat summary, will create new:', e);
+    }
+
+    // Build simple summary from recent user messages
+    try {
+      const sessions = await this.getUserSessions(userId, 5);
+      const recentMessages = sessions.flatMap(s => s.messages)
+        .filter(m => m.role === 'user')
+        .sort((a,b)=>b.timestamp.getTime()-a.timestamp.getTime())
+        .slice(0, 30);
+      const combined = recentMessages.map(m => m.content).join(' ');
+      const summary = combined.substring(0, 2000);
+
+      // Save summary (insert or update)
+      try {
+        await db.insert(chatSummaries).values({ userId, summary })
+          .onConflictDoUpdate({ target: chatSummaries.userId, set: { summary, updatedAt: new Date() } });
+      } catch (saveErr) {
+        console.warn('⚠️ Failed to save chat summary:', saveErr);
+      }
+      return summary;
+    } catch (err) {
+      console.error('❌ Error generating chat summary:', err);
+      return '';
     }
   }
 }

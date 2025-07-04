@@ -155,3 +155,9 @@ export const ailockAchievements = pgTable('ailock_achievements', {
   unlockedAt: timestamp('unlocked_at').defaultNow(),
   createdAt: timestamp('created_at').defaultNow()
 });
+
+export const chatSummaries = pgTable('chat_summaries', {
+  userId: uuid('user_id').references(() => users.id).primaryKey(),
+  summary: text('summary'),
+  updatedAt: timestamp('updated_at').defaultNow()
+});

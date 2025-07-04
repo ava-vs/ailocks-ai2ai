@@ -885,27 +885,26 @@ export default function ChatInterface() {
     <div className="relative flex flex-col h-full bg-slate-900/95 rounded-2xl border border-slate-700/50 shadow-2xl overflow-hidden">
             <VoiceAgentWidget />
 
-      {/* Mobile: Floating Voice Agent Avatar */}
-      {voiceState !== 'idle' && (
-        <div className="md:hidden fixed bottom-20 left-4 z-50">
-          <div 
-            onClick={handleVoiceClick}
-            className={`cursor-pointer transition-all duration-300 rounded-full border-2 ${getAvatarBorderColor()}`}
-          >
-            {ailockProfile ? (
-              <AilockAvatar 
-                level={ailockProfile.level} 
-                characteristics={ailockProfile.characteristics} 
-                size="small"
-                showLevel={false}
-                animated={true}
-              />
-            ) : (
-              <div className="w-12 h-12 rounded-full bg-slate-800 animate-pulse"></div>
-            )}
-          </div>
+      {/* Persistent voice agent avatar (tap/click to toggle) */}
+      <div className="fixed bottom-20 left-4 z-50">
+        <div 
+          onClick={handleVoiceClick}
+          className={`cursor-pointer transition-all duration-300 rounded-full border-2 ${getAvatarBorderColor()}`}
+          title={voiceState !== 'idle' ? (language === 'ru' ? 'Остановить голосовой агент' : 'Stop voice agent') : (language === 'ru' ? 'Запустить разговор с Айлоком' : 'Click to speak')}
+        >
+          {ailockProfile ? (
+            <AilockAvatar 
+              level={ailockProfile.level} 
+              characteristics={ailockProfile.characteristics} 
+              size="small"
+              showLevel={false}
+              animated={true}
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-slate-800 animate-pulse" />
+          )}
         </div>
-      )}
+      </div>
       <div className="h-full flex flex-col bg-slate-900/90 text-white">
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto min-h-0 p-3 md:p-6">

@@ -19,18 +19,21 @@ class IntentExtractionService {
    * @param userInput Последнее сообщение пользователя.
    * @param conversationHistory История переписки для контекста.
    * @param ailockProfile Профиль Ailock пользователя для дополнительного контекста.
+   * @param chatSummary Суммаризация предыдущих взаимодействий.
    * @returns Структурированные данные интента.
    */
   async extractIntentData(
     userInput: string,
     conversationHistory: ChatMessage[] = [],
-    ailockProfile?: FullAilockProfile | null
+    ailockProfile?: FullAilockProfile | null,
+    chatSummary: string = ''
   ): Promise<ExtractedIntentData> {
     const systemPrompt = this.createSystemPrompt();
     const userMessage = this.createUserMessage(
       userInput,
       conversationHistory,
-      ailockProfile
+      ailockProfile,
+      chatSummary
     );
 
     try {
@@ -83,16 +86,24 @@ class IntentExtractionService {
   private createUserMessage(
     userInput: string,
     conversationHistory: ChatMessage[],
-    ailockProfile?: FullAilockProfile | null
+    ailockProfile?: FullAilockProfile | null,
+    chatSummary: string = ''
   ): string {
     let context = 'Here is the data to analyze:\n';
 
     if (ailockProfile) {
-      const userSkills = ailockProfile.skills.map(s => s.skillId).join(', ');
-      context += `\n--- User's Ailock Profile ---\nLevel: ${ailockProfile.level}\nSkills: ${userSkills}\n--- End Profile ---\n`;
+      // Include unlocked skills with their current level for better context
+      const unlockedSkills = ailockProfile.skills
+        .filter(s => s.currentLevel > 0)
+        .map(s => `${s.skillName} (level ${s.currentLevel})`)
+        .join(', ') || 'None';
+
+      context += `\n--- User's Ailock Profile ---\nLevel: ${ailockProfile.level}\nUnlocked Skills: ${unlockedSkills}\n--- End Profile ---\n`;
     }
 
-    if (conversationHistory.length > 0) {
+    if (chatSummary) {
+      context += `\n--- Summary of Previous Interactions ---\n${chatSummary}\n--- End Summary ---\n`;
+    } else if (conversationHistory.length > 0) {
       const historySummary = conversationHistory
         .slice(-10) // Берем последние 10 сообщений для контекста
         .map(m => `${m.role}: ${m.content}`)
