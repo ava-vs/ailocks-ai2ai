@@ -1,27 +1,7 @@
 import { db } from './db';
 import { chatSessions, users } from './schema';
 import { eq, and, desc } from 'drizzle-orm';
-
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  timestamp: Date;
-  mode: string;
-  metadata?: Record<string, any>;
-}
-
-export interface ChatSession {
-  id: string;
-  userId: string;
-  blobKey: string;
-  mode: string;
-  language: string;
-  isActive: boolean;
-  messages: ChatMessage[];
-  createdAt: Date;
-  updatedAt: Date;
-}
+import type { ChatMessage, ChatSession } from './types';
 
 export class ChatService {
   // Simplified write locks - just prevent simultaneous writes to same blob

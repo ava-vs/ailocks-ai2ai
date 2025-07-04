@@ -14,6 +14,7 @@ import AuthModal from '../Auth/AuthModal';
 import VoiceAgentWidget from '../VoiceAgentWidget';
 import { useAilock } from '../../hooks/useAilock';
 import MobileChatControls from '../Mobile/MobileChatControls';
+import AilockAvatar from '../Ailock/AilockAvatar';
 
 interface Message {
   id: string;
@@ -29,7 +30,7 @@ interface IntentCard {
   title: string;
   description: string;
   category: string;
-  requiredSkills: string[];
+  skills: string[];
   budget?: string;
   timeline?: string;
   priority: string;
@@ -43,7 +44,8 @@ interface IntentPreviewData {
   title: string;
   description: string;
   category: string;
-  requiredSkills: string[];
+  skills: string[];
+  location: { city: string; country: string };
   budget?: string;
   timeline?: string;
   priority: string;
@@ -484,59 +486,68 @@ export default function ChatInterface() {
       return;
     }
     
-    // Create a basic intent preview from the current input or last user message
-    const detectCategory = (text: string): string => {
-      const lowerText = text.toLowerCase();
-      if (lowerText.includes('путешеств') || lowerText.includes('tour') || lowerText.includes('travel') || lowerText.includes('поездк') || lowerText.includes('trip')) return "Travel";
-      if (lowerText.includes('маркетинг') || lowerText.includes('marketing') || lowerText.includes('реклам') || lowerText.includes('advertising')) return "Marketing";
-      if (lowerText.includes('дизайн') || lowerText.includes('design') || lowerText.includes('креатив') || lowerText.includes('creative')) return "Design";
-      if (lowerText.includes('программ') || lowerText.includes('разработ') || lowerText.includes('develop') || lowerText.includes('coding')) return "Technology";
-      if (lowerText.includes('бизнес') || lowerText.includes('business') || lowerText.includes('консалт') || lowerText.includes('consulting')) return "Business";
-      return "General";
-    };
-
-    const detectSkills = (text: string): string[] => {
-      const lowerText = text.toLowerCase();
-      const skills = ["Collaboration", "Communication"];
-      if (lowerText.includes('react') || lowerText.includes('javascript') || lowerText.includes('программ')) skills.push("Programming");
-      if (lowerText.includes('дизайн') || lowerText.includes('design')) skills.push("Design");
-      if (lowerText.includes('маркетинг') || lowerText.includes('marketing')) skills.push("Marketing");
-      if (lowerText.includes('путешеств') || lowerText.includes('travel')) skills.push("Travel Planning");
-      return skills;
-    };
-
-    const detectedCategory = detectCategory(messageToUse);
-    const detectedSkills = detectSkills(messageToUse);
-    
-    console.log('🏷️ Detected category:', detectedCategory);
-    console.log('🎯 Detected skills:', detectedSkills);
-
-    const previewData: IntentPreviewData = {
-      title: messageToUse.length > 5 
-        ? messageToUse.substring(0, Math.min(50, messageToUse.length)) 
-        : "New Collaboration Opportunity",
-      description: messageToUse.length > 5 
-        ? messageToUse 
-        : "Looking for collaboration on an exciting project.",
-      category: detectedCategory,
-      requiredSkills: detectedSkills,
-      priority: "medium"
-    };
-    
-    console.log('📋 Intent preview data created:', previewData);
-    console.log('🚀 Setting states: showIntentPreview=true, intentPreview=data');
-    
-    // Устанавливаем состояние
-    setIntentPreview(previewData);
-    setShowIntentPreview(true);
-    
-    // Проверяем состояние через небольшую задержку
-    setTimeout(() => {
-      console.log('⏰ State check after 100ms - showIntentPreview should be true');
-    }, 100);
+    handleCreateIntent(messageToUse);
   };
 
-  const handleCreateIntent = async (updatedData?: any) => {
+  const handleCreateIntent = async (message: string) => {
+    if (isCreatingIntent) return;
+    setIsCreatingIntent(true);
+    toast.loading('Analyzing your intent...');
+
+    try {
+      // Call the new preview endpoint
+      const response = await fetch('/.netlify/functions/intents-preview', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userInput: message,
+          sessionId: sessionId,
+        }),
+      });
+
+      toast.dismiss();
+      const data = await response.json();
+
+      if (response.ok) {
+        // The API returns the intent object inside intentPreview field
+        const previewData = data.intentPreview || data;
+        // Ensure all required fields are present and properly named for IntentPreview
+        setIntentPreview({
+          title: previewData.title || 'Сотрудничество',
+          description: previewData.description || 'Описание возможности сотрудничества',
+          category: previewData.category || 'Technology',
+          requiredSkills: Array.isArray(previewData.requiredSkills) && previewData.requiredSkills.length > 0 ? previewData.requiredSkills : ['Technology'],
+          skills: Array.isArray(previewData.requiredSkills) && previewData.requiredSkills.length > 0 ? previewData.requiredSkills : ['Technology'],
+          location: {
+            city: previewData.location?.city || currentUser.city || '',
+            country: previewData.location?.country || currentUser.country || ''
+          },
+          budget: previewData.budget || '',
+          timeline: previewData.timeline || 'Не определено',
+          priority: previewData.priority || 'medium',
+          ...previewData
+        });
+        setShowIntentPreview(true);
+        toast.success('We have drafted an intent for you. Please review.');
+      } else {
+        throw new Error(data.error || 'Failed to create intent preview.');
+      }
+    } catch (error) {
+      toast.dismiss();
+      toast.error((error as Error).message || 'An error occurred.');
+      console.error('Error creating intent preview:', error);
+    } finally {
+      setIsCreatingIntent(false);
+    }
+  };
+
+  const handleIntentPreviewChange = (updatedData: Partial<IntentPreviewData>) => {
+    setIntentPreview(prev => prev ? { ...prev, ...updatedData } : null);
+  };
+
+  const handleConfirmIntent = async () => {
     if (!sessionId || !intentPreview) return;
     
     if (!currentUser.id || currentUser.id === 'loading') {
@@ -545,7 +556,7 @@ export default function ChatInterface() {
     }
 
     // Use updated data from IntentPreview if provided, otherwise use original data
-    const finalIntentData = updatedData || intentPreview;
+    const finalIntentData = intentPreview;
     const messageToUse = input.trim() || lastUserMessage;
     console.log('Creating intent with data:', finalIntentData);
 
@@ -557,10 +568,9 @@ export default function ChatInterface() {
         body: JSON.stringify({
           sessionId,
           userInput: messageToUse,
-          location: finalIntentData.location || location, // Use custom location if provided
           language,
-          intentData: finalIntentData,
-          userId: currentUser.id
+          userId: currentUser.id,
+          ...finalIntentData // Spread the flat intent data object
         })
       });
 
@@ -873,7 +883,29 @@ export default function ChatInterface() {
 
   return (
     <div className="relative flex flex-col h-full bg-slate-900/95 rounded-2xl border border-slate-700/50 shadow-2xl overflow-hidden">
-      <VoiceAgentWidget />
+            <VoiceAgentWidget />
+
+      {/* Mobile: Floating Voice Agent Avatar */}
+      {voiceState !== 'idle' && (
+        <div className="md:hidden fixed bottom-20 left-4 z-50">
+          <div 
+            onClick={handleVoiceClick}
+            className={`cursor-pointer transition-all duration-300 rounded-full border-2 ${getAvatarBorderColor()}`}
+          >
+            {ailockProfile ? (
+              <AilockAvatar 
+                level={ailockProfile.level} 
+                characteristics={ailockProfile.characteristics} 
+                size="small"
+                showLevel={false}
+                animated={true}
+              />
+            ) : (
+              <div className="w-12 h-12 rounded-full bg-slate-800 animate-pulse"></div>
+            )}
+          </div>
+        </div>
+      )}
       <div className="h-full flex flex-col bg-slate-900/90 text-white">
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto min-h-0 p-3 md:p-6">
@@ -939,7 +971,7 @@ export default function ChatInterface() {
                             </p>
                             
                             <div className="flex flex-wrap gap-2 mb-4">
-                              {intent.requiredSkills.slice(0, 3).map((skill) => (
+                              {intent.skills.slice(0, 3).map((skill: string) => (
                                 <span 
                                   key={skill}
                                   className="bg-purple-500/20 text-purple-400 px-2 py-1 rounded-md text-xs font-medium border border-purple-500/30"
@@ -947,9 +979,9 @@ export default function ChatInterface() {
                                   {skill}
                                 </span>
                               ))}
-                              {intent.requiredSkills.length > 3 && (
+                              {intent.skills.length > 3 && (
                                 <span className="text-white/40 text-xs px-2 py-1">
-                                  +{intent.requiredSkills.length - 3} more
+                                  +{intent.skills.length - 3} more
                                 </span>
                               )}
                             </div>
@@ -1067,16 +1099,10 @@ export default function ChatInterface() {
       {/* Intent Preview Modal */}
       {showIntentPreview && intentPreview && (
         <IntentPreview
-          title={intentPreview.title}
-          description={intentPreview.description}
-          category={intentPreview.category}
-          requiredSkills={intentPreview.requiredSkills}
-          location={location}
-          budget={intentPreview.budget}
-          timeline={intentPreview.timeline}
-          priority={intentPreview.priority}
-          onConfirm={handleCreateIntent}
-          onCancel={handleCancelIntent}
+          {...intentPreview}
+          onConfirm={handleConfirmIntent}
+          onCancel={() => setShowIntentPreview(false)}
+          onDataChange={handleIntentPreviewChange}
           isLoading={isCreatingIntent}
         />
       )}

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Target, X, MapPin, DollarSign, Clock, Check, Edit3, Globe } from 'lucide-react';
 import { useStore } from '@nanostores/react';
 import { currentLanguage } from '../../lib/store';
@@ -7,13 +7,16 @@ interface IntentPreviewProps {
   title: string;
   description: string;
   category: string;
-  requiredSkills: string[];
-  location: { city: string; country: string };
+  // Make skills optional since it might be missing
+  requiredSkills?: string[];
+  skills?: string[];
+  location?: { city: string; country: string };
   budget?: string;
   timeline?: string;
   priority: string;
   onConfirm: (updatedData: any) => void;
   onCancel: () => void;
+  onDataChange: (updatedData: any) => void;
   isLoading?: boolean;
 }
 
@@ -21,27 +24,108 @@ export default function IntentPreview({
   title, 
   description, 
   category,
-  requiredSkills, 
+  skills,
+  requiredSkills,
   location, 
   budget,
   timeline,
   priority,
   onConfirm, 
   onCancel, 
+  onDataChange,
   isLoading = false 
 }: IntentPreviewProps) {
   const language = useStore(currentLanguage);
 
-  // Editable state
-  const [editableTitle, setEditableTitle] = useState(title);
-  const [editableDescription, setEditableDescription] = useState(description);
-  const [editableCategory, setEditableCategory] = useState(category);
-  const [editableSkills, setEditableSkills] = useState(requiredSkills);
-  const [editableCity, setEditableCity] = useState('Rio de Janeiro'); // Default to Rio for the example
-  const [editableCountry, setEditableCountry] = useState('BR');
-  const [editableBudget, setEditableBudget] = useState(budget || '');
-  const [editableTimeline, setEditableTimeline] = useState(timeline || '');
-  const [editablePriority, setEditablePriority] = useState(priority);
+  const [editableTitle, setEditableTitle] = useState('');
+  const [editableDescription, setEditableDescription] = useState('');
+  const [editableCategory, setEditableCategory] = useState('General');
+  const [editableSkills, setEditableSkills] = useState<string[]>([]);
+  const [editableCity, setEditableCity] = useState('');
+  const [editableCountry, setEditableCountry] = useState('');
+  const [editableBudget, setEditableBudget] = useState('');
+  const [editableTimeline, setEditableTimeline] = useState('');
+  const [editablePriority, setEditablePriority] = useState('medium');
+  
+  // Track if initial props have been applied
+  const initialized = useRef(false);
+  // Snapshot of current local state to compare with new props
+  const snapshotRef = useRef<any>(null);
+
+  useEffect(() => {
+    // Build props object for comparison
+    const propsObj = { title, description, category, requiredSkills, skills, location, budget, timeline, priority };
+
+    // Determine if props differ from current local snapshot
+    const propsDifferFromLocal = JSON.stringify(snapshotRef.current) !== JSON.stringify(propsObj);
+
+    if (!initialized.current || propsDifferFromLocal) {
+      // Log all received data
+      console.log('IntentPreview LOADING DATA:', { 
+        title, description, category, 
+        requiredSkills, skills,
+        location, budget, timeline, priority
+      });
+      setEditableTitle(title || 'Нет заголовка'); 
+      setEditableDescription(description || 'Нет описания');
+      setEditableCategory(category || 'General');
+      // Skills - always ensure array
+      const skillsArray = Array.isArray(requiredSkills) && requiredSkills.length > 0 ? 
+        requiredSkills : Array.isArray(skills) && skills.length > 0 ? 
+        skills : ['Technology'];
+      setEditableSkills(skillsArray);
+      // Location
+      if (location) {
+        setEditableCity(location.city || '');
+        setEditableCountry(location.country || '');
+      } else {
+        setEditableCity('');
+        setEditableCountry('');
+      }
+      setEditableBudget(budget || '');
+      setEditableTimeline(timeline || 'Не определено');
+      setEditablePriority(priority || 'medium');
+      initialized.current = true;
+      // Update snapshot to new props
+      snapshotRef.current = propsObj;
+      console.log('IntentPreview DATA LOADED', { 
+        editableTitle: title, editableDescription: description, editableCategory: category, 
+        skillsArray, location, budget, timeline, priority 
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title, description, category, requiredSkills, skills, location, budget, timeline, priority]);
+
+  // Update parent on any local field change
+  useEffect(() => {
+    const updatedData = {
+      title: editableTitle,
+      description: editableDescription,
+      category: editableCategory,
+      skills: editableSkills,
+      requiredSkills: editableSkills, // duplicate for compatibility
+      location: { city: editableCity, country: editableCountry },
+      budget: editableBudget,
+      timeline: editableTimeline,
+      priority: editablePriority
+    };
+    onDataChange(updatedData);
+
+    // Also update snapshot so re-renders with same values won't trigger re-initialization
+    snapshotRef.current = {
+      title: editableTitle,
+      description: editableDescription,
+      category: editableCategory,
+      requiredSkills: editableSkills,
+      skills: editableSkills,
+      location: { city: editableCity, country: editableCountry },
+      budget: editableBudget,
+      timeline: editableTimeline,
+      priority: editablePriority
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editableTitle, editableDescription, editableCategory, editableSkills, 
+     editableCity, editableCountry, editableBudget, editableTimeline, editablePriority]);
 
   // Handle escape key
   useEffect(() => {
@@ -119,9 +203,9 @@ export default function IntentPreview({
       title: editableTitle,
       description: editableDescription,
       category: editableCategory,
-      requiredSkills: editableSkills,
+      skills: editableSkills,
       location: { city: editableCity, country: editableCountry },
-      budget: parseBudget(editableBudget),
+      budget: editableBudget,
       timeline: editableTimeline,
       priority: editablePriority
     };
@@ -194,14 +278,15 @@ export default function IntentPreview({
                 <select
                   value={editableCategory}
                   onChange={(e) => setEditableCategory(e.target.value)}
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-400 focus:bg-white/15 transition-all"
+                  className="w-full px-4 py-3 bg-slate-700 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-400 focus:bg-slate-600 transition-all"
+                  style={{ color: '#ffffff', backgroundColor: '#334155' }}
                 >
-                  <option value="Travel">Travel</option>
-                  <option value="Design">Design</option>
-                  <option value="Marketing">Marketing</option>
-                  <option value="Technology">Technology</option>
-                  <option value="Business">Business</option>
-                  <option value="General">General</option>
+                  <option value="Travel" className="bg-slate-700 text-white">Travel</option>
+                  <option value="Design" className="bg-slate-700 text-white">Design</option>
+                  <option value="Marketing" className="bg-slate-700 text-white">Marketing</option>
+                  <option value="Technology" className="bg-slate-700 text-white">Technology</option>
+                  <option value="Business" className="bg-slate-700 text-white">Business</option>
+                  <option value="General" className="bg-slate-700 text-white">General</option>
                 </select>
               </div>
               
@@ -212,7 +297,7 @@ export default function IntentPreview({
                 <select
                   value={editablePriority}
                   onChange={(e) => setEditablePriority(e.target.value)}
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-400 focus:bg-white/15 transition-all"
+                  className="w-full px-4 py-3 bg-slate-700 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-400 focus:bg-white/15 transition-all"
                 >
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
