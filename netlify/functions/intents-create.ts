@@ -1,10 +1,11 @@
 import { db, withDbRetry } from '../../src/lib/db';
-import { intents } from '../../src/lib/schema';
+import { intents, users } from '../../src/lib/schema';
 import { embeddingService } from '../../src/lib/embedding-service';
 import type { Handler, HandlerEvent, HandlerResponse } from '@netlify/functions';
 import { chatService } from '../../src/lib/chat-service';
 import { intentExtractionService } from '../../src/lib/intent-extraction-service';
 import { ailockService } from '../../src/lib/ailock/core';
+import { eq } from 'drizzle-orm';
 
 export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResponse> => {
   if (event.httpMethod === 'OPTIONS') {
@@ -21,13 +22,43 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
       return responseWithCORS(400, { error: 'Request body is required' });
     }
 
-    // The body now contains a flat object with all necessary data after the preview step.
+    // The body can contain a flat object from a preview step, or a minimal one from voice.
     const intentData = JSON.parse(body);
-    const { sessionId, userId, title, description, category, location, requiredSkills, budget, timeline, priority } = intentData;
+    const { sessionId, userId, title } = intentData;
 
-    if (!sessionId || !userId || !title) {
-      return responseWithCORS(400, { error: 'Session ID, User ID, and Title are required.' });
+    if (!userId || !title) {
+      return responseWithCORS(400, { error: 'User ID and Title are required.' });
     }
+    
+    let finalIntentData = { ...intentData };
+
+    // If the intent is not fully formed (e.g., coming from voice agent with just a title),
+    // use the extraction service to flesh it out.
+    if (!intentData.description) {
+      console.log('Description is missing, using intent extraction service to enrich data...');
+      
+      const session = sessionId ? await chatService.getSession(sessionId) : null;
+      const ailockProfile = await ailockService.getOrCreateAilock(userId);
+      const chatSummary = await chatService.getOrCreateSummary(userId);
+
+      const extractedData = await intentExtractionService.extractIntentData(
+        title, // Use title as the main input for extraction
+        session?.messages || [],
+        ailockProfile,
+        chatSummary
+      );
+      
+      // Combine original data with extracted data. Extracted data is the source of truth.
+      finalIntentData = {
+        ...intentData,
+        ...extractedData,
+      };
+      
+      console.log('Intent data enriched by LLM:', finalIntentData);
+    }
+    
+    // Destructure again from the now-complete data
+    const { description, category, location, requiredSkills, budget, timeline, priority } = finalIntentData;
 
     console.log('Received requiredSkills type:', typeof requiredSkills, 'value:', JSON.stringify(requiredSkills));
     
@@ -44,6 +75,18 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
       skillsArray = ['Collaboration', 'Technology'];
     }
     
+    // --- Location Fallback Logic ---
+    let finalLocation = location;
+    if (!finalLocation && userId) {
+      console.log(`Location not provided for user ${userId}, attempting to fetch from profile.`);
+      const userRecord = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      if (userRecord.length > 0 && userRecord[0].city && userRecord[0].country) {
+        finalLocation = { city: userRecord[0].city, country: userRecord[0].country };
+        console.log(`Using location from user profile: ${finalLocation.city}, ${finalLocation.country}`);
+      }
+    }
+    // --- End Location Fallback ---
+
     console.log('Using skillsArray for DB:', skillsArray);
     
     // Sanitize and structure the data for saving
@@ -52,8 +95,8 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
       title: title.substring(0, 100),
       description: description?.substring(0, 500) || 'Details to be provided.',
       category: category || 'General',
-      targetCountry: location?.country || 'BR',
-      targetCity: location?.city || 'Rio de Janeiro',
+      targetCountry: finalLocation?.country || 'BR',
+      targetCity: finalLocation?.city || 'Rio de Janeiro',
       requiredSkills: skillsArray, 
       budget: budget || null,
       timeline: timeline?.substring(0, 50) || null,

@@ -836,6 +836,17 @@ export default function ChatInterface() {
           mode: 'text'
         };
         setMessages(prev => [...prev, newMessage]);
+
+        // Persist voice message to chat history if we are connected to a real session
+        if (isPersistentSession && sessionId) {
+          fetch('/.netlify/functions/save-message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, message: newMessage })
+          }).catch(err => {
+            console.warn('Failed to persist voice message:', err);
+          });
+        }
       } catch (error) {
         console.warn('Error handling voice message:', error);
       }

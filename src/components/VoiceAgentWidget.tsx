@@ -80,6 +80,65 @@ export default function VoiceAgentWidget() {
           return JSON.stringify({ tool: 'search_intents', error: 'Search failed' });
         }
       },
+      create_intent: async (intentData: any) => {
+        console.log('[Tool] "create_intent" called with data:', intentData);
+
+        // Validate basic shape of incoming data
+        if (!intentData || typeof intentData !== 'object') {
+          console.warn('[Tool] create_intent called with invalid data.');
+          return 'Please provide valid intent data to create an intent.';
+        }
+
+        const userId = (user as any)?.id;
+        if (!userId) {
+          console.warn('[Tool] User not authenticated, cannot create intent.');
+          return 'You need to be signed in to create intents.';
+        }
+
+        try {
+          const response = await fetch('/.netlify/functions/intents-create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId,
+              // Flatten the incoming payload – ElevenLabs forwards all arguments under intentData
+              ...intentData
+            })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            console.error('[Tool] create_intent failed:', data);
+            return `Failed to create intent: ${data.error || 'Unknown error.'}`;
+          }
+
+          // Broadcast the new intent so that UI components (chat, panels) can refresh
+          window.dispatchEvent(
+            new CustomEvent('intentCreated', {
+              detail: {
+                ...data.intent,
+                userId,
+                userName: (user as any)?.name || (user as any)?.email || 'You',
+                isOwn: true
+              }
+            })
+          );
+
+          // Grant XP for successfully creating an intent via voice
+          try {
+            await gainXp('intent_created', { intentId: data.intent.id });
+          } catch (xpErr) {
+            console.warn('[Tool] XP gain failed:', xpErr);
+          }
+
+          console.log('[Tool] Intent created successfully via voice agent:', data.intent);
+          return `Intent "${data.intent.title}" created successfully.`;
+        } catch (err: any) {
+          console.error('[Tool] create_intent encountered an error:', err);
+          return `Error creating intent: ${err?.message || 'Unknown error.'}`;
+        }
+      }
     }
   });
   
