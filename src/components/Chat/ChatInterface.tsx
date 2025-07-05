@@ -896,24 +896,86 @@ export default function ChatInterface() {
     <div className="relative flex flex-col h-full bg-slate-900/95 rounded-2xl border border-slate-700/50 shadow-2xl overflow-hidden">
             <VoiceAgentWidget />
 
-      {/* Persistent voice agent avatar (tap/click to toggle) */}
-      <div className="fixed bottom-30 left-15 z-10">
-        <div 
+      {/* Persistent voice agent avatar (mobile FAB) */}
+      <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-20 md:hidden">
+        <div
           onClick={handleVoiceClick}
-          className={`cursor-pointer transition-all duration-300 rounded-full border-2 ${getAvatarBorderColor()}`}
-          title={voiceState !== 'idle' ? (language === 'ru' ? 'Остановить голосовой агент' : 'Stop voice agent') : (language === 'ru' ? 'Запустить разговор с Айлоком' : 'Click to speak')}
+          className={`w-16 h-16 flex items-center justify-center rounded-full shadow-xl border-2 transition-all duration-300 ${getAvatarBorderColor()} ${voiceState === 'idle' ? 'animate-bounce' : ''}`}
+          title={
+            voiceState !== 'idle'
+              ? language === 'ru'
+                ? 'Остановить голосовой агент'
+                : 'Stop voice agent'
+              : language === 'ru'
+                ? 'Нажмите, чтобы говорить'
+                : 'Tap to speak'
+          }
         >
           {ailockProfile ? (
-            <AilockAvatar 
-              level={ailockProfile.level} 
-              characteristics={ailockProfile.characteristics} 
-              size="small"
+            <AilockAvatar
+              level={ailockProfile.level}
+              characteristics={ailockProfile.characteristics}
+              size="medium"
               showLevel={false}
               animated={true}
             />
           ) : (
             <div className="w-12 h-12 rounded-full bg-slate-800 animate-pulse" />
           )}
+        </div>
+      </div>
+
+      {/* Persistent voice agent avatar (desktop – restored larger style) */}
+      <div className="hidden md:block fixed bottom-20 left-10 z-10">
+        <div
+          onClick={handleVoiceClick}
+          className={`flex flex-col items-center gap-4 p-6 rounded-2xl border-2 shadow-lg cursor-pointer transition-all duration-300 ${getAvatarBorderColor()}`}
+          title={
+            voiceState !== 'idle'
+              ? language === 'ru'
+                ? 'Остановить голосовой агент'
+                : 'Stop voice agent'
+              : language === 'ru'
+                ? 'Запустить разговор с Айлоком'
+                : 'Click to speak'
+          }
+        >
+          {/* Avatar with dynamic status rings */}
+          <div className="relative w-32 h-32">
+            {voiceState === 'listening' && (
+              <>
+                <div className="absolute inset-0 border-2 border-red-400/40 rounded-full animate-ping" style={{ animationDuration: '1s' }} />
+                <div className="absolute inset-0 scale-125 border border-red-300/30 rounded-full animate-ping" style={{ animationDuration: '1.5s', animationDelay: '0.2s' }} />
+              </>
+            )}
+            {voiceState === 'processing' && (
+              <div className="absolute inset-0 border-2 border-yellow-400/40 rounded-full animate-spin" />
+            )}
+            {voiceState === 'speaking' && (
+              <div className="absolute inset-0 border-2 border-green-400/40 rounded-full animate-pulse" />
+            )}
+
+            <img
+              src="/images/ailock-character.png"
+              alt="Ailock AI Assistant"
+              className={`w-full h-full object-contain drop-shadow-2xl animate-float cursor-pointer z-10 transition-transform ${voiceState !== 'idle' ? 'scale-110' : 'hover:scale-105'}`}
+              style={{
+                filter: 'drop-shadow(0 0 20px rgba(74, 158, 255, 0.3))',
+                border: 'none',
+                outline: 'none',
+              }}
+            />
+          </div>
+
+          {/* Status text */}
+          <div className="h-5 text-center">
+            <span className="text-xs text-gray-400">
+              {voiceState === 'idle' && (language === 'ru' ? 'Нажмите, чтобы говорить' : 'Click me to speak')}
+              {voiceState === 'listening' && (language === 'ru' ? '🔴 Слушаю...' : '🔴 Listening...')}
+              {voiceState === 'processing' && (language === 'ru' ? '⚡ Обрабатываю...' : '⚡ Processing...')}
+              {voiceState === 'speaking' && (language === 'ru' ? '🗣️ Говорю...' : '🗣️ Speaking...')}
+            </span>
+          </div>
         </div>
       </div>
       <div className="h-full flex flex-col bg-slate-900/90 text-white">
