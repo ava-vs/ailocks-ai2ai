@@ -7,7 +7,7 @@ interface IntentCard {
   title: string;
   description: string;
   category: string;
-  requiredSkills: string[];
+  skills: string[];
   budget?: string;
   timeline?: string;
   priority: string;
@@ -103,7 +103,7 @@ export default function IntentDetailModal({ isOpen, onClose, onStartWork, intent
           <div>
             <h4 className="text-lg font-semibold text-white mb-3">Required Skills</h4>
             <div className="flex flex-wrap gap-2">
-              {intent.requiredSkills.map(skill => (
+              {intent.skills.map(skill => (
                 <span key={skill} className="bg-purple-500/20 text-purple-400 px-3 py-1.5 rounded-md text-sm font-medium border border-purple-500/30">
                   {skill}
                 </span>

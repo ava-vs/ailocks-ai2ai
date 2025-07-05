@@ -17,17 +17,18 @@ export default function MyAilockPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'skills' | 'achievements'>('overview');
   const [hoveredSkill, setHoveredSkill] = useState<string | null>(null);
 
+  // Load Ailock profile once the authenticated user's ID is available
   useEffect(() => {
     if (currentUser.id && currentUser.id !== 'loading') {
-      loadProfile();
+      loadProfile(currentUser.id);
     }
   }, [currentUser.id]);
 
-  const loadProfile = async () => {
+  const loadProfile = async (userId: string) => {
     try {
       setLoading(true);
       setError(null);
-      const ailockProfile = await ailockApi.getProfile(currentUser.id);
+      const ailockProfile = await ailockApi.getProfile(userId);
       setProfile(ailockProfile);
     } catch (err) {
       console.error('Failed to load Ailock profile:', err);
@@ -42,7 +43,7 @@ export default function MyAilockPage() {
     
     try {
       await ailockApi.upgradeSkill(profile.id, skillId);
-      await loadProfile(); // Refresh profile
+      await loadProfile(profile.id); // Refresh profile
       // Notify other components about profile update
       window.dispatchEvent(new CustomEvent('ailock-profile-updated'));
     } catch (err) {
@@ -72,7 +73,7 @@ export default function MyAilockPage() {
           <h2 className="text-white text-xl font-semibold mb-2">Failed to Load Ailock</h2>
           <p className="text-white/60 mb-6">{error}</p>
           <button 
-            onClick={loadProfile} 
+            onClick={() => loadProfile(currentUser.id)} 
             className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
           >
             Try Again

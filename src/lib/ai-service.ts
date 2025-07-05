@@ -12,6 +12,7 @@ export interface AIOptions {
   budget: 'free' | 'standard' | 'premium';
   language?: string;
   mode?: string;
+  temperature?: number;
 }
 
 export interface ModelConfig {
@@ -261,6 +262,29 @@ export class UnifiedAIService {
     }
     
     return basePrompt;
+  }
+
+  // Health check method
+  async getStructuredJsonResponse<T>(
+    messages: AIMessage[],
+    options: AIOptions
+  ): Promise<T | null> {
+    // We don't need streaming for a JSON response
+    const jsonString = await this.generateWithCostOptimization(messages, options);
+
+    if (!jsonString) {
+      return null;
+    }
+
+    try {
+      // The model might wrap the JSON in markdown, so we clean it up.
+      const cleanedString = jsonString.replace(/^```json\s*|```$/g, '').trim();
+      return JSON.parse(cleanedString) as T;
+    } catch (error) {
+      console.error('Failed to parse JSON response from AI:', error);
+      console.error('Raw response was:', jsonString);
+      return null;
+    }
   }
 
   // Health check method

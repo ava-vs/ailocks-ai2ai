@@ -1,9 +1,11 @@
 import { db, withDbRetry } from '../../src/lib/db';
-import { intents } from '../../src/lib/schema';
+import { intents, users } from '../../src/lib/schema';
 import { embeddingService } from '../../src/lib/embedding-service';
 import type { Handler, HandlerEvent, HandlerResponse } from '@netlify/functions';
 import { chatService } from '../../src/lib/chat-service';
+import { intentExtractionService } from '../../src/lib/intent-extraction-service';
 import { ailockService } from '../../src/lib/ailock/core';
+import { eq } from 'drizzle-orm';
 
 export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResponse> => {
   if (event.httpMethod === 'OPTIONS') {
@@ -20,54 +22,93 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
       return responseWithCORS(400, { error: 'Request body is required' });
     }
 
-    const { sessionId, userInput, location, intentData, userId } = JSON.parse(body);
+    // The body can contain a flat object from a preview step, or a minimal one from voice.
+    const intentData = JSON.parse(body);
+    const { sessionId, userId, title } = intentData;
 
-    if (!sessionId && !userInput && !intentData) {
-      return responseWithCORS(400, { error: 'Either sessionId with userInput, or intentData is required' });
+    if (!userId || !title) {
+      return responseWithCORS(400, { error: 'User ID and Title are required.' });
     }
+    
+    let finalIntentData = { ...intentData };
 
-    let extractedData;
-    let conversationContext = '';
+    // If the intent is not fully formed (e.g., coming from voice agent with just a title),
+    // use the extraction service to flesh it out.
+    if (!intentData.description) {
+      console.log('Description is missing, using intent extraction service to enrich data...');
+      
+      const session = sessionId ? await chatService.getSession(sessionId) : null;
+      const ailockProfile = await ailockService.getOrCreateAilock(userId);
+      const chatSummary = await chatService.getOrCreateSummary(userId);
 
-    // Use provided intent data if available (from preview)
-    if (intentData) {
-      extractedData = intentData;
-    } else {
-      // If a session ID is provided, get the context
-      if (sessionId) {
-        const session = await chatService.getSession(sessionId);
-        if (session) {
-          conversationContext = session.messages.map(m => `${m.role}: ${m.content}`).join('\n');
-        }
+      const extractedData = await intentExtractionService.extractIntentData(
+        title, // Use title as the main input for extraction
+        session?.messages || [],
+        ailockProfile,
+        chatSummary
+      );
+      
+      // Combine original data with extracted data. Extracted data is the source of truth.
+      finalIntentData = {
+        ...intentData,
+        ...extractedData,
+      };
+      
+      console.log('Intent data enriched by LLM:', finalIntentData);
+    }
+    
+    // Destructure again from the now-complete data
+    const { description, category, location, requiredSkills, budget, timeline, priority } = finalIntentData;
+
+    console.log('Received requiredSkills type:', typeof requiredSkills, 'value:', JSON.stringify(requiredSkills));
+    
+    let skillsArray: string[] = [];
+    if (Array.isArray(requiredSkills) && requiredSkills.length > 0) {
+      skillsArray = requiredSkills.slice(0, 5);
+    } else if (typeof requiredSkills === 'object' && requiredSkills !== null) {
+      if (Object.keys(requiredSkills).length > 0) {
+        skillsArray = Object.values(requiredSkills).filter(skill => typeof skill === 'string');
       }
-
-      // Enhanced fallback extraction
-      extractedData = extractIntentFromMessage(userInput || '', conversationContext);
     }
+    
+    if (skillsArray.length === 0) {
+      skillsArray = ['Collaboration', 'Technology'];
+    }
+    
+    // --- Location Fallback Logic ---
+    let finalLocation = location;
+    if (!finalLocation && userId) {
+      console.log(`Location not provided for user ${userId}, attempting to fetch from profile.`);
+      const userRecord = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      if (userRecord.length > 0 && userRecord[0].city && userRecord[0].country) {
+        finalLocation = { city: userRecord[0].city, country: userRecord[0].country };
+        console.log(`Using location from user profile: ${finalLocation.city}, ${finalLocation.country}`);
+      }
+    }
+    // --- End Location Fallback ---
 
-    // Validate and sanitize extracted data
+    console.log('Using skillsArray for DB:', skillsArray);
+    
+    // Sanitize and structure the data for saving
     const intentDataToSave = {
-      userId: userId || null, // Use provided userId or null for anonymous
-      title: extractedData.title?.substring(0, 100) || 'Collaboration Opportunity',
-      description: extractedData.description?.substring(0, 500) || 'Looking for collaboration on an exciting project.',
-      category: validateCategory(extractedData.category) || 'Technology',
-      targetCountry: location?.country || 'BR',
-      targetCity: location?.city || 'Rio de Janeiro',
-      requiredSkills: Array.isArray(extractedData.requiredSkills) 
-        ? extractedData.requiredSkills.slice(0, 5) 
-        : ['Collaboration', 'Communication'],
-      budget: typeof extractedData.budget === 'number' && extractedData.budget > 0 
-        ? extractedData.budget // Keep the original value
-        : null,
-      timeline: extractedData.timeline?.substring(0, 50) || null,
-      priority: validatePriority(extractedData.priority) || 'medium',
+      userId: userId,
+      title: title.substring(0, 100),
+      description: description?.substring(0, 500) || 'Details to be provided.',
+      category: category || 'General',
+      targetCountry: finalLocation?.country || 'BR',
+      targetCity: finalLocation?.city || 'Rio de Janeiro',
+      requiredSkills: skillsArray, 
+      budget: budget || null,
+      timeline: timeline?.substring(0, 50) || null,
+      priority: priority || 'medium',
       status: 'active'
     };
 
-    // Create intent in database, with retry logic for transient connection errors
+    // Create intent in database, with retry logic for transient connection errors (up to 3 attempts)
+    // Always save only a single intent object, never an array
     const newIntent = await withDbRetry(async () => {
       return await db.insert(intents).values(intentDataToSave).returning();
-    });
+    }, 3); // 3 attempts max
 
     console.log(`✅ Intent created: ${newIntent[0].id} - ${intentDataToSave.title}`);
 
@@ -138,88 +179,6 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
     });
   }
 };
-
-function extractIntentFromMessage(userInput: string, conversationContext: string) {
-  const fullText = (conversationContext + ' ' + userInput).toLowerCase();
-  
-  // Enhanced extraction for the specific demo case
-  if (fullText.includes('design tours') && fullText.includes('australian')) {
-    return {
-      title: 'Design Tours with Australian Perspective',
-      description: 'Design tours that showcase an Australian perspective on aesthetics and take in the most beautiful places in the city.',
-      category: 'Design',
-      requiredSkills: ['Tour Design', 'Cultural Perspective', 'Aesthetics', 'Local Knowledge', 'Travel Planning'],
-      budget: null,
-      timeline: '2-3 months',
-      priority: 'medium'
-    };
-  }
-  
-  // Extract category based on keywords
-  let category = 'Technology';
-  if (fullText.includes('research') || fullText.includes('study') || fullText.includes('analysis')) {
-    category = 'Research';
-  } else if (fullText.includes('design') || fullText.includes('ui') || fullText.includes('ux')) {
-    category = 'Design';
-  } else if (fullText.includes('data') || fullText.includes('analytics') || fullText.includes('statistics')) {
-    category = 'Analytics';
-  } else if (fullText.includes('blockchain') || fullText.includes('crypto') || fullText.includes('defi')) {
-    category = 'Blockchain';
-  } else if (fullText.includes('marketing') || fullText.includes('content') || fullText.includes('social')) {
-    category = 'Marketing';
-  } else if (fullText.includes('security') || fullText.includes('cyber') || fullText.includes('audit')) {
-    category = 'Security';
-  }
-
-  // Extract skills based on common keywords
-  const skillKeywords = [
-    'javascript', 'python', 'react', 'node', 'typescript', 'ai', 'ml', 'machine learning',
-    'design', 'figma', 'photoshop', 'marketing', 'seo', 'content', 'writing',
-    'blockchain', 'solidity', 'web3', 'research', 'analysis', 'data science',
-    'tour design', 'cultural perspective', 'aesthetics', 'local knowledge', 'travel planning'
-  ];
-  
-  const foundSkills = skillKeywords.filter(skill => 
-    fullText.includes(skill.toLowerCase())
-  ).slice(0, 5);
-
-  // Extract priority
-  let priority = 'medium';
-  if (fullText.includes('urgent') || fullText.includes('asap') || fullText.includes('immediately')) {
-    priority = 'urgent';
-  } else if (fullText.includes('high priority') || fullText.includes('important')) {
-    priority = 'high';
-  } else if (fullText.includes('low priority') || fullText.includes('when possible')) {
-    priority = 'low';
-  }
-
-  // Extract title from user input (first sentence or up to 50 chars)
-  const sentences = userInput.split(/[.!?]/);
-  const title = sentences[0].length > 50 
-    ? sentences[0].substring(0, 47) + '...'
-    : sentences[0];
-
-  return {
-    title: title.charAt(0).toUpperCase() + title.slice(1) || `${category} Collaboration Opportunity`,
-    description: userInput, // Use user input directly for description
-    category,
-    requiredSkills: foundSkills.length > 0 ? foundSkills : ['Collaboration', 'Communication'],
-    priority,
-    budget: null,
-    timeline: null
-  };
-}
-
-function validateCategory(category: string): string | null {
-  // Syncing with frontend options from IntentPreview.tsx
-  const validCategories = ['Travel', 'Design', 'Marketing', 'Technology', 'Business', 'General', 'Research', 'Analytics', 'Blockchain', 'Security'];
-  return validCategories.includes(category) ? category : null;
-}
-
-function validatePriority(priority: string): string | null {
-  const validPriorities = ['low', 'medium', 'high', 'urgent'];
-  return validPriorities.includes(priority) ? priority : null;
-}
 
 function responseWithCORS(status: number, body: any) {
   return {

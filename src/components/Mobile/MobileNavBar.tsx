@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Home, Search, Star, User, Menu, X, MessageSquare, Target } from 'lucide-react';
 import { useStore } from '@nanostores/react';
 import { appState, toggleMobileMenu } from '@/lib/store';
@@ -38,8 +38,13 @@ export default function MobileNavBar() {
 }
 
 function NavItem({ href, icon: Icon, label }: { href: string; icon: any; label: string }) {
-  const isActive = typeof window !== 'undefined' && window.location.pathname === href;
-  
+  const [isActive, setIsActive] = useState(false);
+
+  useEffect(() => {
+    // This check now runs only on the client, after hydration.
+    setIsActive(window.location.pathname === href);
+  }, [href]);
+
   return (
     <a 
       href={href}
