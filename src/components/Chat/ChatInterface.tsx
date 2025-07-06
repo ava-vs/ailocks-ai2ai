@@ -928,10 +928,10 @@ export default function ChatInterface() {
       </div>
 
       {/* Persistent voice agent avatar (desktop – restored larger style) */}
-      <div className="hidden md:block fixed bottom-20 left-10 z-10">
+      <div className="hidden md:block fixed bottom-48 left-24 z-10">
         <div
           onClick={handleVoiceClick}
-          className={`flex flex-col items-center gap-4 p-6 rounded-2xl border-2 shadow-lg cursor-pointer transition-all duration-300 ${getAvatarBorderColor()}`}
+          className={`relative flex flex-col items-center gap-4 p-6 rounded-2xl border-2 shadow-lg cursor-pointer transition-all duration-300 ${getAvatarBorderColor()}`}
           title={
             voiceState !== 'idle'
               ? language === 'ru'
