@@ -1,5 +1,5 @@
 import type { Handler } from '@netlify/functions';
-import { db } from '../../src/lib/db';
+import { db, withDbRetry, refreshDbConnection } from '../../src/lib/db';
 import { intents, users } from '../../src/lib/schema';
 import { count } from 'drizzle-orm';
 
@@ -16,13 +16,13 @@ export const handler: Handler = async (event) => {
   }
 
   try {
-    // Test database connection and get counts
-    const [userCount] = await db.select({ count: count() }).from(users);
-    const [intentCount] = await db.select({ count: count() }).from(intents);
-    
-    // Get sample data to verify structure
-    const sampleIntent = await db.select().from(intents).limit(1);
-    const sampleUser = await db.select().from(users).limit(1);
+    // Wrap queries with retry logic to handle transient network errors
+    const [userCount] = await withDbRetry(() => db.select({ count: count() }).from(users), 3, 300);
+    const [intentCount] = await withDbRetry(() => db.select({ count: count() }).from(intents), 3, 300);
+
+    // Get sample data to verify structure (non-critical)
+    const sampleIntent = await withDbRetry(() => db.select().from(intents).limit(1), 2, 300).catch(() => []);
+    const sampleUser = await withDbRetry(() => db.select().from(users).limit(1), 2, 300).catch(() => []);
 
     return {
       statusCode: 200,
@@ -31,6 +31,7 @@ export const handler: Handler = async (event) => {
         'Access-Control-Allow-Origin': '*'
       },
       body: JSON.stringify({
+        status: 'ok',
         database: 'connected',
         tables: {
           users: {

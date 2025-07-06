@@ -44,6 +44,7 @@ export default function UserHeaderInfo() {
 
   const handleProfileClick = () => {
     setShowUserMenu(false);
+    console.log('Navigating to /profile');
     window.location.href = '/profile';
   };
 
@@ -80,13 +81,14 @@ export default function UserHeaderInfo() {
             <div className="absolute top-full left-0 mt-2 bg-slate-800/95 backdrop-blur-xl border border-white/20 rounded-lg p-2 min-w-48 shadow-xl z-50 animate-in slide-in-from-top-2 duration-200">
               <div className="text-xs text-white/50 mb-2 px-2">Account</div>
               
-              <button
+              <a
+                href="/profile"
                 onClick={handleProfileClick}
-                className="w-full text-left px-3 py-2 text-sm text-white/80 hover:bg-white/10 rounded-md transition-colors flex items-center space-x-2"
+                className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-white/80 hover:bg-white/10 rounded-md transition-colors"
               >
                 <User className="w-4 h-4" />
                 <span>View Profile</span>
-              </button>
+              </a>
               
               {/* <button
                 onClick={handleLogout}
@@ -122,19 +124,20 @@ export default function UserHeaderInfo() {
           {/* User Menu - Mobile */}
           {showUserMenu && (
             <div className="absolute top-full left-0 mt-2 bg-slate-800/95 backdrop-blur-xl border border-white/20 rounded-lg p-2 min-w-36 shadow-xl z-50 animate-in slide-in-from-top-2 duration-200">
-              <button
+              <a
+                href="/profile"
                 onClick={handleProfileClick}
-                className="w-full text-left px-2 py-1 text-sm text-white/80 hover:bg-white/10 rounded-md transition-colors"
+                className="w-full block text-left px-2 py-1 text-sm text-white/80 hover:bg-white/10 rounded-md transition-colors"
               >
                 Profile
-              </button>
+              </a>
               
-              <button
+              {/* <button
                 onClick={handleLogout}
                 className="w-full text-left px-2 py-1 text-sm text-white/80 hover:bg-white/10 rounded-md transition-colors"
               >
                 Sign Out
-              </button>
+              </button> */}
             </div>
           )}
         </div>
@@ -142,35 +145,36 @@ export default function UserHeaderInfo() {
       
       {/* Mobile Avatar */}
       <div className="md:hidden">
-        <button
+        {/* <button
           onClick={() => setShowUserMenu(!showUserMenu)}
           className="w-4 h-4 rounded-full flex items-center justify-center text-sm font-bold text-white bg-blue-500 hover:bg-blue-600 transition-colors relative"
         >
           {currentUser.name.charAt(0)}
           
           {/* Mobile dropdown menu */}
-          {showUserMenu && (
+          {/* {showUserMenu && (
             <div className="absolute top-full right-0 mt-2 bg-slate-800/95 backdrop-blur-xl border border-white/20 rounded-lg p-2 min-w-36 shadow-xl z-50 animate-in slide-in-from-top-2 duration-200">
-              <div className="text-xs text-white/50 mb-2 px-2">{currentUser.name}</div>
+              <div className="text-xs text-white/50 mb-2 px-2">{currentUser.name}</div> */}
               
-              <button
+              {/* <a
+                href="/profile"
                 onClick={handleProfileClick}
-                className="w-full text-left px-2 py-1 text-sm text-white/80 hover:bg-white/10 rounded-md transition-colors flex items-center space-x-2"
+                className="w-full flex items-center space-x-2 px-2 py-1 text-sm text-white/80 hover:bg-white/10 rounded-md transition-colors"
               >
                 <User className="w-4 h-4" />
                 <span>Profile</span>
-              </button>
+              </a> */}
               
-              <button
+              {/* <button
                 onClick={handleLogout}
                 className="w-full text-left px-2 py-1 text-sm text-white/80 hover:bg-white/10 rounded-md transition-colors flex items-center space-x-2"
               >
                 <LogOut className="w-4 h-4" />
                 <span>Sign Out</span>
-              </button>
+              </button> 
             </div>
           )}
-        </button>
+        </button> */}
       </div>
       
       {/* Upgrade / Premium button */}

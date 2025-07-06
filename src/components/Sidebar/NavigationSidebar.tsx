@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { Search, Star, Clock, User, Home, LogOut } from 'lucide-react';
+import { Home, User, Bell, Info, CreditCard, Bot, LogOut } from 'lucide-react';
 import CollapsibleSidebar from './CollapsibleSidebar';
 
 interface NavLinkProps {
@@ -50,28 +50,39 @@ function NavigationSidebar({ isExpanded = false }: NavigationSidebarProps) {
   return (
     <div className="flex flex-col h-full p-2 text-white">
       <nav className="flex-grow space-y-2">
+        {/* Home */}
         <NavLink href="/" isExpanded={isExpanded} isActive={pathname === '/'}>
           <Home className="w-5 h-5 sidebar-icon" />
           {isExpanded && <span className="font-medium whitespace-nowrap">Home</span>}
         </NavLink>
 
-        <NavLink href="/query-history" isExpanded={isExpanded} isActive={pathname === '/query-history'}>
-          <Search className="w-5 h-5 sidebar-icon" />
-          {isExpanded && <span className="font-medium whitespace-nowrap">Query History</span>}
-        </NavLink>
-
-        <NavLink href="/saved-intents" isExpanded={isExpanded} isActive={pathname === '/saved-intents'}>
-          <Star className="w-5 h-5 sidebar-icon" />
-          {isExpanded && <span className="font-medium whitespace-nowrap">Starred</span>}
-        </NavLink>
-
-        <NavLink href="/recent" isExpanded={isExpanded} isActive={pathname === '/recent'}>
-          <Clock className="w-5 h-5 sidebar-icon" />
-          {isExpanded && <span className="font-medium whitespace-nowrap">Recent</span>}
-        </NavLink>
-
-        <NavLink href="/my-ailock" isExpanded={isExpanded} isActive={pathname === '/my-ailock'}>
+        {/* Profile */}
+        <NavLink href="/profile" isExpanded={isExpanded} isActive={pathname === '/profile'}>
           <User className="w-5 h-5 sidebar-icon" />
+          {isExpanded && <span className="font-medium whitespace-nowrap">Profile</span>}
+        </NavLink>
+
+        {/* Notifications */}
+        <NavLink href="/notifications" isExpanded={isExpanded} isActive={pathname === '/notifications'}>
+          <Bell className="w-5 h-5 sidebar-icon" />
+          {isExpanded && <span className="font-medium whitespace-nowrap">Notifications</span>}
+        </NavLink>
+
+        {/* About Us */}
+        <NavLink href="/about" isExpanded={isExpanded} isActive={pathname === '/about'}>
+          <Info className="w-5 h-5 sidebar-icon" />
+          {isExpanded && <span className="font-medium whitespace-nowrap">About us</span>}
+        </NavLink>
+
+        {/* Pricing */}
+        <NavLink href="/pricing" isExpanded={isExpanded} isActive={pathname === '/pricing'}>
+          <CreditCard className="w-5 h-5 sidebar-icon" />
+          {isExpanded && <span className="font-medium whitespace-nowrap">Pricing</span>}
+        </NavLink>
+
+        {/* My Ailock (desktop only) */}
+        <NavLink href="/my-ailock" isExpanded={isExpanded} isActive={pathname === '/my-ailock'}>
+          <Bot className="w-5 h-5 sidebar-icon" />
           {isExpanded && <span className="font-medium whitespace-nowrap">My Ailock</span>}
         </NavLink>
 

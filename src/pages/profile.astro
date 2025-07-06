@@ -8,12 +8,12 @@ const detectedLanguage = Astro.request.headers.get('X-Detected-Language') || 'en
 // Get user location from edge function
 const userLocationHeader = Astro.request.headers.get('X-User-Location');
 let userLocationData = {
-  country: 'US',
-  city: 'New York',
-  timezone: 'America/New_York',
-  region: 'NY',
-  latitude: 40.7128,
-  longitude: -74.0060,
+  country: 'BR',
+  city: 'Rio de Janeiro',
+  timezone: 'America/Sao_Paulo',
+  region: 'RJ',
+  latitude: -22.9068,
+  longitude: -43.2045,
   isDefault: true
 };
 

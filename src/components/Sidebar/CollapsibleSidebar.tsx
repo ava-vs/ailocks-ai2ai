@@ -9,7 +9,12 @@ interface CollapsibleSidebarProps {
 }
 
 function useMediaQuery(query: string) {
-  const [matches, setMatches] = useState(false);
+  const [matches, setMatches] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false; // Safe default for SSR to match desktop markup
+    }
+    return window.matchMedia(query).matches;
+  });
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -35,7 +40,8 @@ export default function CollapsibleSidebar({ children, side }: CollapsibleSideba
 
   if (isMobile) {
     if (side === 'right') {
-      return null;
+      // Render hidden placeholder to keep DOM consistent between SSR and client
+      return <div className="hidden" />;
     }
     
     return (

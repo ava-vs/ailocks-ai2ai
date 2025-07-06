@@ -34,11 +34,13 @@ export default function ProfilePage() {
   const [editedProfile, setEditedProfile] = useState<UserProfile | null>(null);
   const [activeTab, setActiveTab] = useState<'profile' | 'preferences' | 'security'>('profile');
 
+  // Load profile once authentication is ready and profile not yet loaded
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
+    if (!isLoading && isAuthenticated && !profile) {
       loadProfile();
     }
-  }, [currentUser, isLoading, isAuthenticated]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, isAuthenticated, currentUser.id]);
 
   const loadProfile = async () => {
     setLoading(true);
