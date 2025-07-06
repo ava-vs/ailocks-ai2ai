@@ -15,6 +15,7 @@ import VoiceAgentWidget from '../VoiceAgentWidget';
 import { useAilock } from '../../hooks/useAilock';
 import MobileChatControls from '../Mobile/MobileChatControls';
 import AilockAvatar from '../Ailock/AilockAvatar';
+import { getLevelInfo } from '../../lib/ailock/shared';
 
 interface Message {
   id: string;
@@ -92,6 +93,13 @@ export default function ChatInterface() {
   
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const bottomOfMessagesRef = useRef<HTMLDivElement>(null);
+
+  // Level info for current Ailock profile
+  const levelInfo = ailockProfile ? getLevelInfo(ailockProfile.xp) : null;
+  const progressPercentage = levelInfo ? levelInfo.progressPercentage : 0;
+  const progressXp = levelInfo ? levelInfo.progressXp : 0;
+  const xpNeeded = levelInfo ? levelInfo.xpNeededForNextLevel : 0;
+  const xpLabel = language === 'ru' ? 'PX' : 'XP';
 
   const getAvatarBorderColor = () => {
     switch (voiceState) {
@@ -896,36 +904,48 @@ export default function ChatInterface() {
     <div className="relative flex flex-col h-full bg-slate-900/95 rounded-2xl border border-slate-700/50 shadow-2xl overflow-hidden">
             <VoiceAgentWidget />
 
-      {/* Persistent voice agent avatar (mobile FAB) */}
-      <div className="fixed bottom-48 left-1/2 -translate-x-1/2 z-20 md:hidden">
-        <div
-          onClick={handleVoiceClick}
-          className={`relative w-16 h-16 flex items-center justify-center rounded-full shadow-xl border-2 transition-all duration-300 ${getAvatarBorderColor()} ${voiceState === 'idle' ? 'animate-bounce' : ''}`}
-          title={
-            voiceState !== 'idle'
-              ? language === 'ru'
-                ? 'Остановить голосовой агент'
-                : 'Stop voice agent'
-              : language === 'ru'
-                ? 'Нажмите, чтобы говорить'
-                : 'Tap to speak'
-          }
-        >
-          {ailockProfile ? (
-            <AilockAvatar
-              level={ailockProfile.level}
-              characteristics={ailockProfile.characteristics}
-              size="medium"
-              showLevel={false}
-              animated={true}
-            />
-          ) : (
-            <div className="w-12 h-12 rounded-full bg-slate-800 animate-pulse" />
-          )}
-          {/* Mic icon overlay */}
-          <Mic className="absolute -bottom-1 -right-1 w-5 h-5 text-white bg-blue-500 rounded-full p-0.5 shadow" />
+      {/* Persistent voice agent avatar (mobile FAB) – hidden on welcome screen */}
+      {messages.length > 0 && (
+        <div className="fixed bottom-48 left-1/2 -translate-x-1/2 z-20 md:hidden">
+          <div className="flex flex-col items-center">
+            {/* Avatar button */}
+            <div
+              onClick={handleVoiceClick}
+              className={`relative w-16 h-16 flex items-center justify-center rounded-full shadow-xl border-2 transition-all duration-300 ${getAvatarBorderColor()} ${voiceState === 'idle' ? 'animate-bounce' : ''}`}
+              title={
+                voiceState !== 'idle'
+                  ? language === 'ru'
+                    ? 'Остановить голосовой агент'
+                    : 'Stop voice agent'
+                  : language === 'ru'
+                    ? 'Нажмите, чтобы говорить'
+                    : 'Tap to speak'
+              }
+            >
+              {ailockProfile ? (
+                <AilockAvatar
+                  level={ailockProfile.level}
+                  characteristics={ailockProfile.characteristics}
+                  size="medium"
+                  showLevel={false}
+                  animated={true}
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-slate-800 animate-pulse" />
+              )}
+              {/* Mic icon overlay */}
+              <Mic className="absolute -bottom-1 -right-1 w-5 h-5 text-white bg-blue-500 rounded-full p-0.5 shadow" />
+            </div>
+            {/* Level progress bar */}
+            <div className="w-16 h-2 mt-2 bg-slate-700/60 rounded-full overflow-hidden shadow-inner">
+              <div
+                className="h-full bg-gradient-to-r from-cyan-400 to-blue-500 transition-all duration-500"
+                style={{ width: `${progressPercentage}%` }}
+              />
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Persistent voice agent avatar (desktop – restored larger style) */}
       <div className="hidden md:block fixed bottom-48 left-24 z-10">
@@ -986,7 +1006,7 @@ export default function ChatInterface() {
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="max-w-md text-center px-4">
-                {/* <button 
+                <button 
                   onClick={handleVoiceClick}
                   className={`w-20 h-20 mx-auto mb-4 rounded-full transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer border-4 ${getAvatarBorderColor()}`}
                   title="Click to activate voice agent"
@@ -1001,7 +1021,28 @@ export default function ChatInterface() {
                       outline: 'none'
                     }}
                   />
-                </button> */}
+                </button>
+                {/* Level progress bar (welcome screen) */}
+                {ailockProfile && (
+                  <div className="w-48 mx-auto mb-6">
+                    {/* Labels */}
+                    <div className="flex items-center justify-between text-xs font-medium mb-1">
+                      <span className="px-2 py-0.5 rounded-full bg-yellow-400 text-slate-900 whitespace-nowrap">
+                        {language === 'ru' ? 'УРОВЕНЬ' : 'LEVEL'} {levelInfo?.level}
+                      </span>
+                      <span className="text-yellow-300 whitespace-nowrap">
+                        {progressXp.toLocaleString()} / {xpNeeded.toLocaleString()} {xpLabel}
+                      </span>
+                    </div>
+                    {/* Progress bar */}
+                    <div className="w-full h-2 bg-slate-700/60 rounded-full overflow-hidden shadow-inner">
+                      <div
+                        className="h-full bg-gradient-to-r from-cyan-400 to-blue-500 transition-all duration-500"
+                        style={{ width: `${progressPercentage}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
                 <h1 className="text-2xl md:text-4xl font-bold mb-4 text-white">
                   {getWelcomeText().welcome}
                 </h1>
