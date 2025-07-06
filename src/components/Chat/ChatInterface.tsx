@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, Plus, MapPin, Eye } from 'lucide-react';
+import { Send, Bot, Plus, MapPin, Eye, Mic } from 'lucide-react';
 import { useStore } from '@nanostores/react';
 import { appState, setMode, setLanguage, type AIMode, type Language } from '../../lib/store';
 import { useUserSession } from '../../hooks/useUserSession';
@@ -897,10 +897,10 @@ export default function ChatInterface() {
             <VoiceAgentWidget />
 
       {/* Persistent voice agent avatar (mobile FAB) */}
-      <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-20 md:hidden">
+      <div className="fixed bottom-48 left-1/2 -translate-x-1/2 z-20 md:hidden">
         <div
           onClick={handleVoiceClick}
-          className={`w-16 h-16 flex items-center justify-center rounded-full shadow-xl border-2 transition-all duration-300 ${getAvatarBorderColor()} ${voiceState === 'idle' ? 'animate-bounce' : ''}`}
+          className={`relative w-16 h-16 flex items-center justify-center rounded-full shadow-xl border-2 transition-all duration-300 ${getAvatarBorderColor()} ${voiceState === 'idle' ? 'animate-bounce' : ''}`}
           title={
             voiceState !== 'idle'
               ? language === 'ru'
@@ -922,6 +922,8 @@ export default function ChatInterface() {
           ) : (
             <div className="w-12 h-12 rounded-full bg-slate-800 animate-pulse" />
           )}
+          {/* Mic icon overlay */}
+          <Mic className="absolute -bottom-1 -right-1 w-5 h-5 text-white bg-blue-500 rounded-full p-0.5 shadow" />
         </div>
       </div>
 
@@ -984,7 +986,7 @@ export default function ChatInterface() {
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="max-w-md text-center px-4">
-                <button 
+                {/* <button 
                   onClick={handleVoiceClick}
                   className={`w-20 h-20 mx-auto mb-4 rounded-full transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer border-4 ${getAvatarBorderColor()}`}
                   title="Click to activate voice agent"
@@ -999,7 +1001,7 @@ export default function ChatInterface() {
                       outline: 'none'
                     }}
                   />
-                </button>
+                </button> */}
                 <h1 className="text-2xl md:text-4xl font-bold mb-4 text-white">
                   {getWelcomeText().welcome}
                 </h1>
