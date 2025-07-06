@@ -1006,9 +1006,9 @@ export default function ChatInterface() {
                 <p className="text-gray-300 mb-2 text-base md:text-lg">
                   I'm here to help you in <span className="text-blue-400 font-medium">{mode}</span> mode.
                 </p>
-                <p className="text-gray-400 mb-8 text-sm md:text-base">
+                {/* <p className="text-gray-400 mb-8 text-sm md:text-base">
                   {getModeDescription(mode)}
-                </p>
+                </p> */}
               </div>
             </div>
           ) : (

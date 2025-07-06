@@ -51,7 +51,7 @@ export default function MobileChatControls({
                     focus:outline-none focus:border-blue-500 focus:bg-slate-800/80 resize-none transition-all"
           disabled={isStreaming}
           rows={1}
-          style={{ minHeight: '44px', maxHeight: '100px' }}
+          style={{ minHeight: '132px', maxHeight: '200px' }}
         />
 
         {/* Input Actions */}
