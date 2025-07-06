@@ -57,7 +57,7 @@ export default function UserHeaderInfo() {
   };
 
   return (
-    <div className="flex items-center space-x-2">
+    <div className="flex items-center space-x-3">
       {/* User Info - Full version for large screens */}
       <div className="hidden lg:flex items-center space-x-2 text-sm text-white/70">
         <div className="relative" ref={menuRef}>
@@ -88,13 +88,13 @@ export default function UserHeaderInfo() {
                 <span>View Profile</span>
               </button>
               
-              <button
+              {/* <button
                 onClick={handleLogout}
                 className="w-full text-left px-3 py-2 text-sm text-white/80 hover:bg-white/10 rounded-md transition-colors flex items-center space-x-2"
               >
                 <LogOut className="w-4 h-4" />
                 <span>Sign Out</span>
-              </button>
+              </button> */}
             </div>
           )}
         </div>
@@ -140,11 +140,11 @@ export default function UserHeaderInfo() {
         </div>
       </div>
       
-      {/* Mobile User Avatar */}
+      {/* Mobile Avatar */}
       <div className="md:hidden">
         <button
           onClick={() => setShowUserMenu(!showUserMenu)}
-          className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white bg-blue-500 hover:bg-blue-600 transition-colors relative"
+          className="w-4 h-4 rounded-full flex items-center justify-center text-sm font-bold text-white bg-blue-500 hover:bg-blue-600 transition-colors relative"
         >
           {currentUser.name.charAt(0)}
           
@@ -173,10 +173,10 @@ export default function UserHeaderInfo() {
         </button>
       </div>
       
-      {/* Upgrade Button */}
+      {/* Upgrade / Premium button */}
       <a 
         href="/pricing"
-        className="flex items-center space-x-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-2 py-1 md:px-4 md:py-2 rounded-lg text-xs md:text-sm font-semibold hover:scale-105 transition-transform duration-200"
+        className="flex items-center justify-center space-x-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white w-8 h-8 md:w-auto md:h-auto md:px-4 md:py-2 rounded-lg text-xs md:text-sm font-semibold hover:scale-105 transition-transform duration-200"
       >
         <Gem className="w-3 h-3 md:w-4 md:h-4" />
         <span className="hidden sm:inline">Upgrade</span>

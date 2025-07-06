@@ -485,8 +485,8 @@ button, input, [role="button"] {
 
   /* Touch targets */
   button, [role="button"] {
-    min-height: 44px;
-    min-width: 44px;
+    min-height: 32px;
+    min-width: 32px;
   }
 
   /* Improved mobile typography */
@@ -548,8 +548,8 @@ button, input, [role="button"] {
   
   /* Ensure buttons have proper touch targets */
   .mobile-touch-target {
-    min-height: 44px;
-    min-width: 44px;
+    min-height: 32px;
+    min-width: 32px;
   }
   
   /* Bottom safe area for iOS */
