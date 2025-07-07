@@ -5,6 +5,7 @@ import { ailockApi } from '@/lib/ailock/api';
 import type { FullAilockProfile } from '@/lib/ailock/shared';
 import { getLevelInfo } from '@/lib/ailock/shared';
 import AilockQuickStatus from './AilockQuickStatus';
+import AilockInboxWidget from './AilockInboxWidget';
 
 export default function AilockHeaderWidget() {
   const { currentUser } = useUserSession();
@@ -12,6 +13,8 @@ export default function AilockHeaderWidget() {
   const [profile, setProfile] = useState<FullAilockProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isQuickStatusOpen, setIsQuickStatusOpen] = useState(false);
+  const [isInboxOpen, setIsInboxOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Use auth user if available, otherwise fallback to demo user
   const displayUser = authUser || currentUser;
@@ -31,8 +34,25 @@ export default function AilockHeaderWidget() {
       }
     };
 
+    const handleInboxUpdate = (event: CustomEvent) => {
+      if (event.detail.unreadCount !== undefined) {
+        setUnreadCount(event.detail.unreadCount);
+      }
+    };
+
+    const handleAilockNotification = () => {
+      setUnreadCount(prev => prev + 1);
+    };
+
     window.addEventListener('ailock-profile-updated', handleProfileUpdate);
-    return () => window.removeEventListener('ailock-profile-updated', handleProfileUpdate);
+    window.addEventListener('ailock-inbox-updated', handleInboxUpdate as any);
+    window.addEventListener('ailock-notification', handleAilockNotification);
+    
+    return () => {
+      window.removeEventListener('ailock-profile-updated', handleProfileUpdate);
+      window.removeEventListener('ailock-inbox-updated', handleInboxUpdate as any);
+      window.removeEventListener('ailock-notification', handleAilockNotification);
+    };
   }, [userId]);
 
   const loadProfile = async () => {

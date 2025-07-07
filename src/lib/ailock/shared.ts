@@ -79,7 +79,13 @@ export type XpEventType =
   | 'achievement_unlocked'
   | 'project_started'
   | 'project_completed'
-  | 'first_login_today';
+  | 'first_login_today'
+  // AI2AI Interaction Events
+  | 'ailock_message_sent'
+  | 'ailock_message_helpful'
+  | 'intent_clarification_provided'
+  | 'collaboration_initiated'
+  | 'collaboration_success';
 
 // This is safe for the client as it's just a constant object.
 export const XP_REWARDS: Record<XpEventType, number> = {
@@ -91,7 +97,13 @@ export const XP_REWARDS: Record<XpEventType, number> = {
   achievement_unlocked: 50,
   project_started: 30,
   project_completed: 200,
-  first_login_today: 10
+  first_login_today: 10,
+  // AI2AI Interaction Events
+  ailock_message_sent: 8,
+  ailock_message_helpful: 15,
+  intent_clarification_provided: 25,
+  collaboration_initiated: 50,
+  collaboration_success: 100
 };
 
 // --- Client-Safe Functions ---

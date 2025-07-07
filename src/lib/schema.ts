@@ -161,3 +161,34 @@ export const chatSummaries = pgTable('chat_summaries', {
   summary: text('summary'),
   updatedAt: timestamp('updated_at').defaultNow()
 });
+
+export const ailockInteractions = pgTable('ailock_interactions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  fromAilockId: uuid('from_ailock_id').references(() => ailocks.id).notNull(),
+  toAilockId: uuid('to_ailock_id').references(() => ailocks.id).notNull(),
+  
+  // Integration with existing systems
+  sessionId: varchar('session_id', { length: 255 }), // references chat_sessions.blob_key
+  intentId: uuid('intent_id').references(() => intents.id),
+  
+  // Core message data
+  interactionType: varchar('interaction_type', { length: 30 }).notNull(),
+  messageContent: text('message_content').notNull(),
+  
+  // LLM analysis results
+  classification: jsonb('classification'),
+  moderation: jsonb('moderation'),
+  
+  // Status management
+  status: varchar('status', { length: 20 }).default('sent'),
+  
+  // Relationships and metadata
+  parentInteractionId: uuid('parent_interaction_id'),
+  chainId: uuid('chain_id'),
+  priority: integer('priority').default(50),
+  
+  // Timestamps
+  createdAt: timestamp('created_at').defaultNow(),
+  readAt: timestamp('read_at'),
+  respondedAt: timestamp('responded_at')
+});

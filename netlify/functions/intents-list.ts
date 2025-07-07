@@ -38,10 +38,10 @@ export const handler: Handler = async (event) => {
         try {
           console.log(`🧠 Performing semantic search for: "${searchQuery}"`);
           
-          // Add timeout protection for semantic search
+          // Add timeout protection for semantic search - увеличен с 5 до 15 секунд
           const semanticSearchPromise = embeddingService.searchByText(searchQuery, limit);
           const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Semantic search timeout')), 5000)
+            setTimeout(() => reject(new Error('Semantic search timeout')), 15000)
           );
           
           const semanticResults = await Promise.race([semanticSearchPromise, timeoutPromise]) as any[];
@@ -55,11 +55,12 @@ export const handler: Handler = async (event) => {
               }
             }
           } else {
-            console.log('ℹ️ No semantic matches found');
+            console.log('ℹ️ No semantic matches found, using keyword search');
           }
         } catch (semanticError) {
           console.warn('⚠️ Semantic search failed, continuing with keyword search:', 
             semanticError instanceof Error ? semanticError.message : semanticError);
+          // Не блокируем выполнение - продолжаем с keyword search
         }
       } else {
         console.log('⚠️ No OpenAI API key found, skipping semantic search');

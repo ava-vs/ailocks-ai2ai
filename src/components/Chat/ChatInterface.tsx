@@ -900,6 +900,43 @@ export default function ChatInterface() {
     };
   }, [mode]); 
 
+  // Level up event handler
+  useEffect(() => {
+    const handleLevelUp = (event: CustomEvent) => {
+      try {
+        const { newLevel, skillPointsGained, xpGained, eventType } = event.detail;
+        
+        console.log('🎉 Level up event received:', { newLevel, skillPointsGained, xpGained, eventType });
+        
+        // Определяем какой скилл разблокирован на этом уровне
+        let newSkillUnlocked = null;
+        if (newLevel === 2) {
+          newSkillUnlocked = {
+            id: 'semantic_search',
+            name: 'Semantic Search',
+            description: 'Improves relevance and accuracy of all searches by understanding context.',
+            branch: 'research'
+          };
+        }
+        
+        setLevelUpInfo({
+          isOpen: true,
+          newLevel,
+          skillPointsGained,
+          xpGained,
+          newSkillUnlocked
+        });
+      } catch (error) {
+        console.error('Error handling level up event:', error);
+      }
+    };
+
+    window.addEventListener('ailock-level-up', handleLevelUp as EventListener);
+    return () => {
+      window.removeEventListener('ailock-level-up', handleLevelUp as EventListener);
+    };
+  }, []);
+
   return (
     <div className="relative flex flex-col h-full bg-slate-900/95 rounded-2xl border border-slate-700/50 shadow-2xl overflow-hidden">
             <VoiceAgentWidget />
@@ -1086,7 +1123,7 @@ export default function ChatInterface() {
                             </p>
                             
                             <div className="flex flex-wrap gap-2 mb-4">
-                              {intent.skills.slice(0, 3).map((skill: string) => (
+                              {(intent.skills ?? []).slice(0, 3).map((skill: string) => (
                                 <span 
                                   key={skill}
                                   className="bg-purple-500/20 text-purple-400 px-2 py-1 rounded-md text-xs font-medium border border-purple-500/30"
@@ -1094,9 +1131,9 @@ export default function ChatInterface() {
                                   {skill}
                                 </span>
                               ))}
-                              {intent.skills.length > 3 && (
+                              {(intent.skills?.length ?? 0) > 3 && (
                                 <span className="text-white/40 text-xs px-2 py-1">
-                                  +{intent.skills.length - 3} more
+                                  +{(intent.skills?.length ?? 0) - 3} more
                                 </span>
                               )}
                             </div>

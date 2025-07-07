@@ -132,4 +132,87 @@ export const gainAilockXp = async (eventType: string, context: Record<string, an
   } catch (error) {
     console.error('Gain XP error:', error);
   }
+};
+
+// === AI2AI Interaction helpers ===
+export const getAilockProfileByUser = async (userId: string) => {
+  try {
+    const response = await fetch(`${API_BASE}/ailock-profile?userId=${userId}`);
+    if (!response.ok) throw new Error('Failed to fetch Ailock profile');
+    const data = await response.json();
+    return data.profile;
+  } catch (error) {
+    console.error('Get other Ailock profile error:', error);
+    throw error;
+  }
+};
+
+export const sendAilockMessage = async ({
+  toAilockId,
+  message,
+  type = 'collaboration_request',
+  intentId,
+  sessionId
+}: {
+  toAilockId: string;
+  message: string;
+  type?: 'clarify_intent' | 'provide_info' | 'collaboration_request' | 'response';
+  intentId?: string;
+  sessionId?: string;
+}) => {
+  try {
+    const res = await fetch(`${API_BASE}/ailock-interaction`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ toAilockId, message, type, intentId, sessionId })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to send message');
+    }
+    return await res.json();
+  } catch (error) {
+    console.error('Send Ailock message error:', error);
+    throw error;
+  }
+};
+
+export const fetchInboxInteractions = async (limit = 50, offset = 0) => {
+  try {
+    const res = await fetch(`${API_BASE}/ailock-interaction?limit=${limit}&offset=${offset}`, {
+      credentials: 'include'
+    });
+    if (!res.ok) throw new Error('Failed to fetch inbox');
+    const data = await res.json();
+    return data.interactions || [];
+  } catch (error) {
+    console.error('Fetch inbox error:', error);
+    return [];
+  }
+};
+
+export const replyAilockMessage = async ({
+  originalInteractionId,
+  responseContent
+}: {
+  originalInteractionId: string;
+  responseContent: string;
+}) => {
+  try {
+    const res = await fetch(`${API_BASE}/ailock-interaction`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ originalInteractionId, responseContent })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to reply');
+    }
+    return await res.json();
+  } catch (error) {
+    console.error('Reply Ailock message error:', error);
+    throw error;
+  }
 }; 

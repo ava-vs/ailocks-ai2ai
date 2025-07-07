@@ -1,8 +1,11 @@
-import React from 'react';
-import { X, MapPin, Tag, Briefcase, Calendar, DollarSign, Target, CheckCircle, ArrowRight } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, MapPin, Tag, Briefcase, Calendar, DollarSign, Target, CheckCircle, ArrowRight, Loader2, Send, MessageCircle } from 'lucide-react';
+import { sendAilockMessage, replyAilockMessage, getAilockProfileByUser, fetchInboxInteractions } from '../../lib/api';
+import { createPortal } from 'react-dom';
 
 // We'll need to move this interface to a shared types file later
 interface IntentCard {
+  userId?: string;
   id: string;
   title: string;
   description: string;
@@ -22,18 +25,71 @@ interface IntentDetailModalProps {
   onClose: () => void;
   onStartWork: (intent: IntentCard) => void;
   intent: IntentCard | null;
+  alreadyInWork?: boolean;
 }
 
-export default function IntentDetailModal({ isOpen, onClose, onStartWork, intent }: IntentDetailModalProps) {
+export default function IntentDetailModal({ isOpen, onClose, onStartWork, intent, alreadyInWork = false }: IntentDetailModalProps) {
   if (!isOpen || !intent) return null;
+
+  const [authorAilockId, setAuthorAilockId] = useState<string | null>(null);
+  const [thread, setThread] = useState<any[]>([]);
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+  const [replyTo, setReplyTo] = useState<any | null>(null);
+
+  // Load author Ailock ID & thread on mount/open
+  useEffect(() => {
+    const load = async () => {
+      try {
+        if (intent.userId) {
+          const profile = await getAilockProfileByUser(intent.userId);
+          setAuthorAilockId(profile.id);
+        }
+        const inbox = await fetchInboxInteractions(100);
+        const intentThread = inbox.filter((i: any) => i.intentId === intent.id);
+        setThread(intentThread);
+      } catch (err) {
+        console.warn('Failed to load intent thread:', err);
+      }
+    };
+    load();
+  }, [intent]);
+
+  const handleSend = async () => {
+    if (!authorAilockId || !message.trim()) return;
+    setSending(true);
+    try {
+      if (replyTo) {
+        const res = await replyAilockMessage({
+          originalInteractionId: replyTo.id,
+          responseContent: message.trim()
+        });
+        setThread(prev => [res.response, ...prev]);
+        setReplyTo(null);
+      } else {
+        const res = await sendAilockMessage({
+          toAilockId: authorAilockId,
+          message: message.trim(),
+          intentId: intent.id,
+          type: 'collaboration_request'
+        });
+        setThread(prev => [res.interaction, ...prev]);
+      }
+      setMessage('');
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setSending(false);
+    }
+  };
 
   const handleStartWorkClick = () => {
     onStartWork(intent);
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+  const modalContent = (
+    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-[1000] animate-fade-in">
       <div className="bg-slate-800/90 border border-blue-500/30 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-slate-700/50 flex-shrink-0">
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
@@ -45,7 +101,7 @@ export default function IntentDetailModal({ isOpen, onClose, onStartWork, intent
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto">
+        <div className="p-6 overflow-y-auto space-y-8">
           <div className="mb-4">
             <h3 className="text-2xl font-bold text-white mb-2">{intent.title}</h3>
             <p className="text-gray-300 leading-relaxed">{intent.description}</p>
@@ -103,11 +159,57 @@ export default function IntentDetailModal({ isOpen, onClose, onStartWork, intent
           <div>
             <h4 className="text-lg font-semibold text-white mb-3">Required Skills</h4>
             <div className="flex flex-wrap gap-2">
-              {intent.skills.map(skill => (
-                <span key={skill} className="bg-purple-500/20 text-purple-400 px-3 py-1.5 rounded-md text-sm font-medium border border-purple-500/30">
+              {(intent.skills ?? []).map((skill, idx) => (
+                <span key={`${skill}-${idx}`} className="bg-purple-500/20 text-purple-400 px-3 py-1.5 rounded-md text-sm font-medium border border-purple-500/30">
                   {skill}
                 </span>
               ))}
+            </div>
+          </div>
+
+          {/* Messaging section */}
+          <div>
+            <h4 className="text-lg font-semibold text-white mb-3 flex items-center gap-2"><MessageCircle className="w-5 h-5"/>Discussion</h4>
+            <div className="max-h-56 overflow-y-auto space-y-3 mb-3 border border-slate-700/50 rounded-lg p-3 bg-slate-700/30">
+              {thread.length === 0 && (
+                <p className="text-gray-400 text-sm">No messages yet.</p>
+              )}
+              {thread.map((item) => {
+                const isAuthor = item.fromAilockId === authorAilockId;
+                const isSelected = replyTo?.id === item.id;
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => setReplyTo(isSelected ? null : item)}
+                    className={`p-2 rounded-md text-sm cursor-pointer transition-colors ${isAuthor ? 'bg-slate-600/60' : 'bg-blue-600/30 ml-auto'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}
+                  >
+                    <p className="whitespace-pre-wrap text-gray-100">{item.content}</p>
+                    <span className="text-gray-400 text-xs">{new Date(item.createdAt).toLocaleString()}</span>
+                  </div>
+                );
+              })}
+            </div>
+            {replyTo && (
+              <div className="mb-2 text-xs text-blue-300 flex items-center gap-2">
+                <ArrowRight className="w-3 h-3" /> Replying to: <span className="italic truncate max-w-[12rem]">{replyTo.content}</span>
+                <button className="text-red-400" onClick={() => setReplyTo(null)} title="Cancel reply"><X /></button>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                rows={2}
+                placeholder="Write a message…"
+                className="flex-1 rounded-lg bg-slate-700/60 text-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={handleSend}
+                disabled={!message.trim() || sending || !authorAilockId}
+                className="p-3 rounded-lg bg-blue-500 hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center"
+              >
+                {sending ? <Loader2 className="w-5 h-5 animate-spin"/> : <Send className="w-5 h-5"/>}
+              </button>
             </div>
           </div>
         </div>
@@ -119,15 +221,19 @@ export default function IntentDetailModal({ isOpen, onClose, onStartWork, intent
           >
             Close
           </button>
-          <button
-            onClick={handleStartWorkClick}
-            className="px-6 py-2 rounded-lg text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 transition-colors flex items-center gap-2"
-          >
-            <span>Take to "In Work"</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          {!alreadyInWork && (
+            <button
+              onClick={handleStartWorkClick}
+              className="px-6 py-2 rounded-lg text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 transition-colors flex items-center gap-2"
+            >
+              <span>Take to "In Work"</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 } 

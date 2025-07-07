@@ -5,17 +5,7 @@ import { getProfile as fetchProfile, gainXp as gainXpApi } from '../lib/ailock/a
 import { useCallback, useEffect } from 'react';
 import { useUserSession } from './useUserSession';
 import toast from 'react-hot-toast';
-
-export type XpEventType = 
-  | 'chat_message_sent'
-  | 'voice_message_sent'
-  | 'intent_created'
-  | 'intent_deleted'
-  | 'skill_used_successfully'
-  | 'achievement_unlocked'
-  | 'project_started'
-  | 'project_completed'
-  | 'first_login_today';
+import type { XpEventType } from '../lib/ailock/shared';
 
 export function useAilock() {
   const { profile, isLoading, error } = useStore(ailockStore);
@@ -61,10 +51,23 @@ export function useAilock() {
             ...profile,
             xp: result.newXp,
             level: result.newLevel,
-            skillPoints: result.newSkillPoints
+            skillPoints: result.newSkillPoints || (profile.skillPoints + (result.skillPointsGained || 0))
         };
 
         setAilockProfile(updatedProfile as FullAilockProfile);
+
+        if (result.leveledUp) {
+          console.log(`🎉 Ailock leveled up to level ${result.newLevel}!`);
+          
+          window.dispatchEvent(new CustomEvent('ailock-level-up', { 
+            detail: { 
+              newLevel: result.newLevel,
+              skillPointsGained: result.skillPointsGained || 1,
+              xpGained: result.xpGained,
+              eventType
+            } 
+          }));
+        }
 
         window.dispatchEvent(new CustomEvent('ailock-profile-updated', { detail: updatedProfile }));
         return result;

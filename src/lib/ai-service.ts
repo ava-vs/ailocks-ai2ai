@@ -277,9 +277,14 @@ export class UnifiedAIService {
     }
 
     try {
-      // The model might wrap the JSON in markdown, so we clean it up.
-      const cleanedString = jsonString.replace(/^```json\s*|```$/g, '').trim();
-      return JSON.parse(cleanedString) as T;
+      // Clean markdown fences and extract first JSON object, ignoring trailing commentary.
+      let cleaned = jsonString.replace(/^```json\s*|```$/g, '').trim();
+      const firstBrace = cleaned.indexOf('{');
+      const lastBrace = cleaned.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+      }
+      return JSON.parse(cleaned) as T;
     } catch (error) {
       console.error('Failed to parse JSON response from AI:', error);
       console.error('Raw response was:', jsonString);

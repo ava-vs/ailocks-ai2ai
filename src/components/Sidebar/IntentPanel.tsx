@@ -4,6 +4,7 @@ import AilockWidget from '../Ailock/AilockWidget';
 import toast from 'react-hot-toast';
 import { useUserSession } from '../../hooks/useUserSession';
 import { deleteIntent } from '../../lib/api';
+import IntentDetailModal from '../Chat/IntentDetailModal';
 
 interface Intent {
   id: string;
@@ -40,6 +41,34 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
   const { currentUser, isAuthenticated, isLoading: isUserLoading } = useUserSession();
   const [notificationCount, setNotificationCount] = useState(0);
   const [deletingIntentId, setDeletingIntentId] = useState<string | null>(null);
+
+  // Modal state
+  const [selectedIntent, setSelectedIntent] = useState<Intent | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Persisted storage key depends on user
+  const getStorageKey = (userId: string | undefined) => `inWorkIntents_${userId || 'guest'}`;
+
+  // Load persisted In-Work intents on user change
+  useEffect(() => {
+    if (currentUser?.id && currentUser.id !== 'loading') {
+      try {
+        const stored = localStorage.getItem(getStorageKey(currentUser.id));
+        if (stored) {
+          setInWorkIntents(JSON.parse(stored));
+        }
+      } catch (err) {
+        console.warn('Failed to load persisted In-Work intents:', err);
+      }
+    }
+  }, [currentUser.id]);
+
+  // Helper to persist
+  const persistInWork = (updated: Intent[]) => {
+    try {
+      localStorage.setItem(getStorageKey(currentUser.id), JSON.stringify(updated));
+    } catch {}
+  };
 
   const checkDbStatus = async () => {
     try {
@@ -101,14 +130,18 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
 
   const handleIntentInWork = useCallback((event: CustomEvent) => {
     const intentToMove = event.detail;
-    if (!inWorkIntents.some(intent => intent.id === intentToMove.id)) {
-      setInWorkIntents(prev => [intentToMove, ...prev]);
-      setActiveTab('in-work');
-     // toast.success(`"${intentToMove.title.substring(0,20)}..." moved to In Work.`);
-    } else {
-      toast.error('Intent is already in your "In Work" list.');
-    }
-  }, [inWorkIntents]);
+    setInWorkIntents(prev => {
+      if (prev.some(i => i.id === intentToMove.id)) {
+        toast.error('Intent is already in your "In Work" list.');
+        return prev;
+      }
+      const updated = [intentToMove, ...prev];
+      persistInWork(updated);
+      toast.success('Intent added to "In Work"');
+      return updated;
+    });
+    setActiveTab('in-work');
+  }, [persistInWork]);
 
   const handleDeleteIntent = async (intentId: string, intentTitle: string) => {
     if (!currentUser?.id) {
@@ -143,7 +176,13 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
   const handleUserChanged = () => {
     console.log('User changed, refetching intents...');
     setSearchQuery(null);
-    setInWorkIntents([]); // Clear in-work intents for new user
+    // Reload "In Work" intents for the new user from localStorage
+    try {
+      const stored = localStorage.getItem(getStorageKey(currentUser.id));
+      setInWorkIntents(stored ? JSON.parse(stored) : []);
+    } catch {
+      setInWorkIntents([]);
+    }
     setMyIntents([]); // Clear my intents for new user
     fetchIntents();
     fetchMyIntents();
@@ -162,8 +201,10 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
     try {
       const response = await fetch(`/.netlify/functions/intents-list?userId=${currentUser.id}&myIntents=true`);
       if (response.ok) {
-        const data = await response.json();
-        setMyIntents(data);
+        const res = await response.json();
+        // API returns { intents: [...] }
+        const list = Array.isArray(res) ? res : res.intents;
+        setMyIntents(list || []);
       } else {
         console.error('Failed to fetch my intents, using mock data');
         // setMyIntents(getMockMyIntents());
@@ -275,6 +316,20 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
     }
   ];
 
+  const openIntentModal = (intent: Intent) => {
+    setSelectedIntent(intent);
+    setIsModalOpen(true);
+  };
+
+  const closeIntentModal = () => {
+    setIsModalOpen(false);
+    setSelectedIntent(null);
+  };
+
+  const handleStartWork = (intent: any) => {
+    window.dispatchEvent(new CustomEvent('intent-in-work', { detail: intent }));
+  };
+
   if (!isExpanded) {
     return (
       <div className="relative h-full flex flex-col items-center bg-slate-900/80 backdrop-blur-sm text-white border-l border-slate-700/50">
@@ -381,7 +436,7 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
   );
 
   const IntentCard = ({ intent, showDeleteButton = false }: { intent: Intent; showDeleteButton?: boolean }) => (
-    <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3.5 mb-3 hover:border-slate-600/80 transition-colors duration-200">
+    <div onClick={() => openIntentModal(intent)} className="cursor-pointer bg-slate-800/50 border border-slate-700/50 rounded-lg p-3.5 mb-3 hover:border-slate-600/80 transition-colors duration-200">
       <div className="flex justify-between items-start mb-2">
         <h4 className="text-sm font-semibold text-white/90 leading-tight flex-1 pr-2">
           {intent.title}
@@ -392,7 +447,7 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
           </div>
           {showDeleteButton && (
             <button
-              onClick={() => handleDeleteIntent(intent.id, intent.title)}
+              onClick={(e) => { e.stopPropagation(); handleDeleteIntent(intent.id, intent.title); }}
               disabled={deletingIntentId === intent.id}
               className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded-md transition-colors disabled:opacity-50"
               title="Удалить интент"
@@ -534,6 +589,15 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
           </button>
         </div>
       </div>
+
+      {/* Intent detail modal */}
+      <IntentDetailModal
+        isOpen={isModalOpen}
+        onClose={closeIntentModal}
+        onStartWork={(intent) => handleStartWork(intent)}
+        intent={selectedIntent ? { ...selectedIntent, skills: (selectedIntent as any).skills || selectedIntent.requiredSkills } as any : null}
+        alreadyInWork={!!selectedIntent && inWorkIntents.some(i => i.id === selectedIntent.id)}
+      />
     </div>
   );
 }

@@ -39,6 +39,9 @@ export default function MobileIntentPanel({ isOpen, onClose }: MobileIntentPanel
   const { currentUser } = useUserSession();
   const [deletingIntentId, setDeletingIntentId] = useState<string | null>(null);
 
+  // Persisted storage key depends on user
+  const getStorageKey = (userId: string | undefined) => `inWorkIntents_${userId || 'guest'}`;
+
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -73,10 +76,14 @@ export default function MobileIntentPanel({ isOpen, onClose }: MobileIntentPanel
     const handleIntentInWork = (event: CustomEvent) => {
       const intentToMove = event.detail;
       if (!inWorkIntents.some(intent => intent.id === intentToMove.id)) {
-        setInWorkIntents(prev => [intentToMove, ...prev]);
+        const updated = [intentToMove, ...inWorkIntents];
+        setInWorkIntents(updated);
+        persistInWork(updated);
         setActiveTab('in-work');
+        toast.success('Intent added to "In Work"');
       } else {
-        toast.error('Intent is already in your "In Work" list.');
+        // Duplicate – show only one toast to avoid multiple panels duplications
+        console.info('[MobileIntentPanel] Duplicate In-Work intent ignored');
       }
     };
 
@@ -98,6 +105,26 @@ export default function MobileIntentPanel({ isOpen, onClose }: MobileIntentPanel
       setIsLoadingIntents(false);
     }
   }, [isOpen, intents.length]);
+
+  useEffect(() => {
+    // Load persisted In-Work intents when user changes
+    if (currentUser?.id && currentUser.id !== 'loading') {
+      try {
+        const stored = localStorage.getItem(getStorageKey(currentUser.id));
+        if (stored) {
+          setInWorkIntents(JSON.parse(stored));
+        }
+      } catch (err) {
+        console.warn('Failed to load persisted In-Work intents (mobile):', err);
+      }
+    }
+  }, [currentUser.id]);
+
+  const persistInWork = (updated: Intent[]) => {
+    try {
+      localStorage.setItem(getStorageKey(currentUser.id), JSON.stringify(updated));
+    } catch {}
+  };
 
   const handleDeleteIntent = async (intentId: string, intentTitle: string) => {
     if (!currentUser?.id) {

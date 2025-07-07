@@ -22,9 +22,9 @@ export class EmbeddingService {
     }
 
     try {
-      // Create abort controller for timeout
+      // Create abort controller for timeout - увеличен с 10 до 30 секунд
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
       const response = await fetch(this.OPENAI_API_URL, {
         method: 'POST',
@@ -62,8 +62,8 @@ export class EmbeddingService {
     } catch (error) {
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
-          console.error('OpenAI API request timed out after 10 seconds');
-          throw new Error('OpenAI API timeout');
+          console.error('OpenAI API request timed out after 30 seconds');
+          throw new Error('OpenAI API timeout - please try again');
         }
         console.error('Failed to generate embedding:', error.message);
       } else {

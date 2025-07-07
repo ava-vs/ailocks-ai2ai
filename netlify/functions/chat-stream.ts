@@ -1,6 +1,8 @@
 import type { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 import { ChatService } from "../../src/lib/chat-service";
 import { UnifiedAIService } from "../../src/lib/ai-service";
+import { ailockMessageService } from "../../src/lib/ailock/message-service";
+import type { AilockNotificationEvent } from "../../src/types/ailock-interactions";
 
 const chatService = new ChatService();
 const aiService = new UnifiedAIService();
@@ -805,4 +807,44 @@ async function performDeepResearch(query: string, userId: string, language: stri
   } catch (error: any) {
     throw new Error(error.message || 'Ошибка выполнения глубокого исследования');
   }
+}
+
+/**
+ * Send AI2AI notification through SSE
+ */
+export async function sendAilockNotification(
+  toUserId: string,
+  fromAilockName: string,
+  fromAilockId: string,
+  fromAilockLevel: number,
+  message: string,
+  intentId?: string
+): Promise<void> {
+  const notification: AilockNotificationEvent = {
+    type: 'ailock_notification',
+    interaction: {
+      id: `notif-${Date.now()}`,
+      fromAilock: {
+        id: fromAilockId,
+        name: fromAilockName,
+        level: fromAilockLevel
+      },
+      content: message,
+      intentId,
+      createdAt: new Date()
+    }
+  };
+
+  // В реальной реализации здесь был бы WebSocket или другой способ push-уведомлений
+  // Пока что логируем для демонстрации интеграции
+  console.log('🔔 AI2AI Notification:', {
+    toUserId,
+    notification
+  });
+  
+  // TODO: Реализовать real-time push через WebSocket или Server-Sent Events
+  // Возможные варианты:
+  // 1. WebSocket connection pool
+  // 2. Netlify Functions + EventEmitter
+  // 3. Внешний сервис (Pusher, Ably)
 }

@@ -49,7 +49,7 @@ export default function VoiceAgentWidget() {
     },
     clientTools: {
       search_intents: async ({ query }: any) => {
-        console.log(`[Tool] 'search_intents' called with query: "${query}"`);
+        console.log(`[Tool] 'search_intents' called with query: \"${query}\"`);
 
         if (typeof query !== 'string' || !query.trim()) {
           console.warn('[Tool] search_intents called with an invalid query.');
@@ -57,27 +57,33 @@ export default function VoiceAgentWidget() {
         }
 
         try {
+          console.log(`[Tool] Starting search for: \"${query}\"`);
           const results = await searchIntents(query);
-          console.log(`[Tool] Found ${results.length} results.`);
+          console.log(`[Tool] Search completed successfully. Found ${results.length} results.`);
           
-          window.dispatchEvent(new CustomEvent('voice-search-results', { detail: { query, results } }));
-          
-          window.dispatchEvent(new CustomEvent('voice-intents-found', { 
-            detail: { 
-              intents: results.slice(0, 3),
-              query: query,
-              source: 'voice'
-            } 
-          }));
-
-          if (!results || results.length === 0) {
-            return `I couldn't find any intents matching "${query}". You can try a different search or create a new intent.`;
+          // Отправляем события для UI только если есть результаты
+          if (results && results.length > 0) {
+            window.dispatchEvent(new CustomEvent('voice-search-results', { detail: { query, results } }));
+            window.dispatchEvent(new CustomEvent('voice-intents-found', { detail: { intents: results, query, source: 'voice' } }));
+            
+            return `Found ${results.length} collaboration opportunities for \"${query}\". Results have been displayed in the chat interface.`;
+          } else {
+            return `No collaboration opportunities found for \"${query}\". Try using different keywords or broader search terms.`;
           }
           
-          return `Found ${results.length} intents for "${query}". I have displayed the top results on the screen.`;
-        } catch (toolError) {
-          console.error('[Tool] The "search_intents" tool failed:', toolError);
-          return JSON.stringify({ tool: 'search_intents', error: 'Search failed' });
+        } catch (error) {
+          console.error('[Tool] search_intents error:', error);
+          
+          // Предоставляем полезную обратную связь пользователю вместо технических деталей
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          
+          if (errorMessage.includes('timeout') || errorMessage.includes('OpenAI API timeout')) {
+            return "Search is taking longer than expected due to high demand. Please try again in a moment or use simpler search terms.";
+          } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+            return "Connection issue occurred while searching. Please check your internet connection and try again.";
+          } else {
+            return "Search service is temporarily unavailable. Please try again later or contact support if the issue persists.";
+          }
         }
       },
       create_intent: async (intentData: any) => {
@@ -138,6 +144,117 @@ export default function VoiceAgentWidget() {
           console.error('[Tool] create_intent encountered an error:', err);
           return `Error creating intent: ${err?.message || 'Unknown error.'}`;
         }
+      },
+      send_ailock_message: async ({ toAilockName, message, type }: any) => {
+        console.log(`[Tool] 'send_ailock_message' called to ${toAilockName} with message: "${message}"`);
+
+        if (!toAilockName || !message || !type) {
+          return "Please provide the recipient Ailock name, message content, and interaction type.";
+        }
+
+        const userId = (user as any)?.id;
+        if (!userId) {
+          return 'You need to be signed in to send messages to other Ailocks.';
+        }
+
+        try {
+          // Сначала найдем Ailock по имени
+          const searchResponse = await fetch(`/.netlify/functions/ailock-interaction?action=search&name=${encodeURIComponent(toAilockName)}`);
+          const searchData = await searchResponse.json();
+          
+          if (!searchData.ailocks || searchData.ailocks.length === 0) {
+            return `I couldn't find an Ailock named "${toAilockName}". Please check the name and try again.`;
+          }
+
+          const targetAilock = searchData.ailocks[0];
+          
+          // Отправляем сообщение
+          const response = await fetch('/.netlify/functions/ailock-interaction', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            },
+            body: JSON.stringify({
+              toAilockId: targetAilock.id,
+              message,
+              type
+            })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            return `Failed to send message: ${data.error || 'Unknown error'}`;
+          }
+
+          // Начисляем XP за отправку сообщения
+          try {
+            await gainXp('ailock_message_sent', { 
+              interactionId: data.interaction.id,
+              targetAilockId: targetAilock.id
+            });
+          } catch (xpErr) {
+            console.warn('[Tool] XP gain failed for message sent:', xpErr);
+          }
+
+          return `Message sent successfully to ${toAilockName}. ${data.estimatedResponseTime ? `Expected response time: ${data.estimatedResponseTime}` : ''}`;
+        } catch (err: any) {
+          console.error('[Tool] send_ailock_message error:', err);
+          return `Error sending message: ${err?.message || 'Unknown error'}`;
+        }
+      },
+      check_ailock_inbox: async ({ limit = 5 }: { limit?: number } = {}) => {
+        console.log(`[Tool] 'check_ailock_inbox' called with limit: ${limit}`);
+
+        const userId = (user as any)?.id;
+        if (!userId) {
+          return 'You need to be signed in to check your Ailock inbox.';
+        }
+
+        try {
+          const response = await fetch(`/.netlify/functions/ailock-interaction?limit=${limit}&status=sent`, {
+            headers: { 
+              'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            }
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            return `Failed to check inbox: ${data.error || 'Unknown error'}`;
+          }
+
+          const { interactions, unreadCount } = data;
+
+          if (!interactions || interactions.length === 0) {
+            return 'Your Ailock inbox is empty. No new messages from other Ailocks.';
+          }
+
+          // Показываем сообщения в интерфейсе
+          window.dispatchEvent(new CustomEvent('ailock-inbox-updated', { 
+            detail: { 
+              interactions: interactions.slice(0, limit),
+              unreadCount,
+              source: 'voice'
+            } 
+          }));
+
+          let summary = `You have ${unreadCount} unread messages. Here are the latest ${Math.min(limit, interactions.length)}:\n`;
+          
+          interactions.slice(0, limit).forEach((interaction: any, index: number) => {
+            const fromName = interaction.fromAilock?.name || 'Unknown Ailock';
+            const snippet = interaction.content.length > 50 ? 
+              interaction.content.substring(0, 50) + '...' : 
+              interaction.content;
+            summary += `${index + 1}. From ${fromName}: "${snippet}"\n`;
+          });
+
+          return summary;
+        } catch (err: any) {
+          console.error('[Tool] check_ailock_inbox error:', err);
+          return `Error checking inbox: ${err?.message || 'Unknown error'}`;
+        }
       }
     }
   });
@@ -194,7 +311,9 @@ export default function VoiceAgentWidget() {
         await conversation.startSession({ 
           signedUrl,
           dynamicVariables: {
-            username: (user as any)?.name || (user as any)?.email || 'Marco'
+            username: (user as any)?.name || (user as any)?.email || 'Marco',
+            ailock_level: ailockProfile?.level || 1,
+            ailock_skills: ailockProfile?.skills?.map(s => s.skillName).join(', ') || 'None'
           }
         });
       } catch (err) {
