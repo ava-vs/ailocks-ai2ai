@@ -142,13 +142,25 @@ export class AilockMessageService {
       throw new Error('Original interaction not found');
     }
     
+    // Создать контекст, чтобы ответ наследовал intentId / sessionId оригинала
+    const interactionContext: InteractionContext | undefined = context || (
+      original.intentId || original.sessionId ? {
+        intent: {
+          id: original.intentId || undefined,
+          sessionId: original.sessionId || undefined,
+          chainId: (original as any).chainId || undefined,
+          title: '' // title не требуется для сохранения, оставляем пустым
+        } as any
+      } : undefined
+    );
+
     // Отправить ответ
     const response = await this.sendInteraction(
       fromAilockId,
       original.fromAilockId, // Ответ отправителю
       responseContent,
       'response',
-      context
+      interactionContext
     );
     
     // Обновить связь с родительским сообщением
@@ -156,6 +168,9 @@ export class AilockMessageService {
       .update(ailockInteractions)
       .set({ parentInteractionId: originalInteractionId })
       .where(eq(ailockInteractions.id, response.id));
+    
+    // Обновляем объект в памяти, чтобы фронтенд сразу увидел связь
+    (response as any).parentId = originalInteractionId;
     
     // Пометить оригинальное как отвеченное
     await db

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { X, MapPin, Tag, Briefcase, Calendar, DollarSign, Target, CheckCircle, ArrowRight, Loader2, Send, MessageCircle } from 'lucide-react';
 import { sendAilockMessage, replyAilockMessage, getAilockProfileByUser, fetchInboxInteractions } from '../../lib/api';
+import AilockQuickStatus from '../Ailock/AilockQuickStatus';
 import { createPortal } from 'react-dom';
 
 // We'll need to move this interface to a shared types file later
@@ -36,6 +37,8 @@ export default function IntentDetailModal({ isOpen, onClose, onStartWork, intent
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [replyTo, setReplyTo] = useState<any | null>(null);
+  const [authorProfile, setAuthorProfile] = useState<any | null>(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   // Load author Ailock ID & thread on mount/open
   useEffect(() => {
@@ -44,6 +47,7 @@ export default function IntentDetailModal({ isOpen, onClose, onStartWork, intent
         if (intent.userId) {
           const profile = await getAilockProfileByUser(intent.userId);
           setAuthorAilockId(profile.id);
+          setAuthorProfile(profile);
         }
         const inbox = await fetchInboxInteractions(100);
         const intentThread = inbox.filter((i: any) => i.intentId === intent.id);
@@ -177,14 +181,37 @@ export default function IntentDetailModal({ isOpen, onClose, onStartWork, intent
               {thread.map((item) => {
                 const isAuthor = item.fromAilockId === authorAilockId;
                 const isSelected = replyTo?.id === item.id;
-                return (
+                const parent = item.parentId ? thread.find(t => t.id === item.parentId) : null;
+
+                const Avatar = () => (
                   <div
-                    key={item.id}
-                    onClick={() => setReplyTo(isSelected ? null : item)}
-                    className={`p-2 rounded-md text-sm cursor-pointer transition-colors ${isAuthor ? 'bg-slate-600/60' : 'bg-blue-600/30 ml-auto'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}
+                    className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 cursor-pointer"
+                    onClick={() => isAuthor && setShowProfileModal(true)}
                   >
+                    <img src="/images/ailock-avatar.png" alt="avatar" className="w-full h-full object-cover" />
+                  </div>
+                );
+
+                const Bubble = () => (
+                  <div
+                    onClick={() => setReplyTo(isSelected ? null : item)}
+                    className={`max-w-[80%] p-2 rounded-md text-sm cursor-pointer transition-colors ${isAuthor ? 'bg-slate-600/60' : 'bg-blue-600/40'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}
+                  >
+                    {parent && (
+                      <div className="text-xs italic text-gray-300 mb-1 border-l-2 border-gray-500 pl-2 line-clamp-2">
+                        {parent.content.slice(0, 100)}
+                      </div>
+                    )}
                     <p className="whitespace-pre-wrap text-gray-100">{item.content}</p>
-                    <span className="text-gray-400 text-xs">{new Date(item.createdAt).toLocaleString()}</span>
+                    <span className="text-gray-400 text-[10px]">{new Date(item.createdAt).toLocaleString()}</span>
+                  </div>
+                );
+
+                return (
+                  <div key={item.id} className={`flex ${isAuthor ? 'justify-start' : 'justify-end'} items-start gap-2`}>
+                    {isAuthor && <Avatar />}
+                    <Bubble />
+                    {!isAuthor && <Avatar />}
                   </div>
                 );
               })}
@@ -232,6 +259,13 @@ export default function IntentDetailModal({ isOpen, onClose, onStartWork, intent
           )}
         </div>
       </div>
+      {/* Profile quick modal */}
+      <AilockQuickStatus
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        profile={authorProfile}
+        onOpenFullProfile={() => {}}
+      />
     </div>
   );
 
