@@ -1236,15 +1236,14 @@ This architecture is specifically designed for the bolt.new hackathon environmen
 
 ### 🔄 **В РАЗРАБОТКЕ (15%)**
 
-#### **1. Voice Agent Integration (70%)**
-- ✅ Поиск Айлоков по имени (`searchAilocksByName`)
-- ❌ **Нужно добавить AI2AI инструменты в VoiceAgentWidget:**
+#### **1. Voice Agent Integration (90%)**
+- ✅ **AI2AI инструменты добавлены в VoiceAgentWidget:**
   ```typescript
-  send_ailock_message: async ({ targetAilockId, message, intentId }) => {
-    // Отправка сообщения через голос
+  send_ailock_message: async ({ toAilockName, message, type }) => {
+    // Отправка сообщения через голос (уже реализовано)
   },
-  check_ailock_inbox: async () => {
-    // Проверка новых сообщений голосом
+  check_ailock_inbox: async ({ limit }) => {
+    // Проверка новых сообщений голосом (уже реализовано)
   }
   ```
 
@@ -1261,7 +1260,7 @@ This architecture is specifically designed for the bolt.new hackathon environmen
 - ✅ Функция `autoClarifyIntent` реализована
 - ❌ **Нужно интегрировать в `intents-create.ts`:**
   ```typescript
-  // Автоматическая отправка clarify_intent при неполных интентах
+  // Автоматическая отправка сообщения о clarify_intent при неполных интентах
   const missingFields = validateIntentCompleteness(finalIntentData);
   if (missingFields.length > 0) {
     // Найти и уведомить релевантных Айлоков
