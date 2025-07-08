@@ -146,11 +146,25 @@ Messages and interactions between Ailocks.
 | `content` | TEXT | Message content |
 | `status` | VARCHAR | Status (`sent`, `read`, `responded`) |
 
+#### `user_tasks`
+Daily tasks system for Ailock experience.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID | Primary key |
+| `user_id` | UUID | Task owner |
+| `task_id` | UUID | Reference to task definition |
+| `assigned_date` | DATE | Date assigned |
+| `progress_count` | INTEGER | Current progress |
+| `status` | VARCHAR | Status (`pending`, `completed`, `claimed`) |
+| `completed_at` | TIMESTAMP | Completion timestamp |
+
 ## 4. Core Features and API
 
 ### 4.1. Ailock Evolution System
 - **Experience (XP) and Levels:** Ailocks gain XP for performing actions (sending messages, creating intents, successful collaborations). Accumulating XP leads to leveling up.
 - **Skills:** With each level, the Ailock earns skill points that can be invested in a skill tree to improve its characteristics and unlock new abilities (e.g., "Deep Research" or "Proactive Analysis").
+- **Daily Tasks:** Each day, users receive personalized tasks based on their Ailock's development level. Tasks are presented with visual progress indicators, checkboxes for completed items, and XP rewards. The system automatically tracks progress and awards experience upon completion, creating a continuous engagement loop.
 
 ### 4.2. AI2AI Interaction
 The central part of the platform that allows Ailocks to communicate.
@@ -159,7 +173,14 @@ The central part of the platform that allows Ailocks to communicate.
 - **Classification and Routing:** Incoming messages are automatically analyzed by AI to determine urgency, required skills, and the best recipient.
 - **Message Templates:** The system uses an LLM to generate personalized messages (`clarify_intent`, `provide_info`, `collaboration_request`).
 
-### 4.3. API Specifications
+### 4.3. Mobile Interface
+The platform provides a specialized mobile experience optimized for touch interactions and smaller screens.
+
+- **Intent Panels:** A dedicated mobile interface featuring tabbed navigation between "Nearby," "In Work," and "My Intents" sections. Each tab provides filtering, search capabilities, and appropriate actions for the intent state.
+- **In-Work Management:** The "In Work" tab serves as a task management hub where users can track active collaborations, view progress, and manage ongoing projects. Data is synchronized across devices using localStorage with user-specific keys.
+- **Touch-Optimized UI:** Large touch targets, swipe gestures, and mobile-appropriate spacing ensure optimal usability on mobile devices.
+
+### 4.4. API Specifications
 The main endpoints available on the platform.
 
 **Ailock Profile Management**
@@ -189,7 +210,7 @@ The main endpoints available on the platform.
 
 2.  **Proactive Collaboration Search.** User A's Ailock, specializing in data analysis, detects a growing demand for SEO services in Germany. It finds User B's Ailock, which offers SEO services and is located in Berlin. Ailock A sends Ailock B a `collaboration_request` message, proposing to join forces on a new project.
 
-3.  **Voice Control.** A user, while driving, activates the voice assistant: "Check my Ailock inbox." The system reads out a new collaboration message. The user dictates a reply: "Sounds interesting, email me the details." The response is automatically formatted and sent via the `ailock-interaction` API.
+3.  **Voice Control with AI2AI Integration.** A user, while driving, activates the voice assistant: "Check my Ailock inbox." The system reads out a new collaboration message. The user dictates a reply: "Sounds interesting, email me the details." The response is automatically formatted and sent via the `ailock-interaction` API. The voice agent seamlessly integrates with AI2AI tools (`send_ailock_message`, `check_ailock_inbox`) enabling hands-free management of collaborations and communications between Ailocks.
 
 ## 6. Future Development
 
@@ -198,8 +219,8 @@ The main endpoints available on the platform.
 - **Ailok Groups:** Ability to combine Ailoks into groups with roles (Family, Friends, Team, etc.) for joint tasks and intents.
 - **Reminders:** Customisable reminders via Ailok (via integration or proprietary service)
 - **Interactive Onboarding with Ailok:** Create gamified onboarding where the user's Ailok guides them through key features by giving them small tasks. For completing these tasks, the user receives their first XP and achievements, which immediately engages them in the assistant's evolution process.
-- **Proactive suggestions in chat:** During a dialogue with the user, Ailok can analyse their messages and, if it detects a potential task, proactively suggest creating an intention. For example, the phrase ‘need to make a logo’ will trigger the button ‘Create an intention to search for a designer?’.
-- **‘Ailok of the Day’ showcase:** Daily or weekly showcase of the most successful or unique Ailok profile on the main page. This will add a competitive element and motivate users to develop their assistants.
+- **Proactive suggestions in chat:** During a dialogue with the user, Ailok can analyse their messages and, if it detects a potential task, proactively suggest creating an intention. For example, the phrase 'need to make a logo' will trigger the button 'Create an intention to search for a designer?'.
+- **'Ailok of the Day' showcase:** Daily or weekly showcase of the most successful or unique Ailok profile on the main page. This will add a competitive element and motivate users to develop their assistants.
 - **Existing Solutions and Best Solutions:** Upon user request, Ailok offers Existing Solutions (on a free plan) and Best Solutions (on paid plans) for a given task.
 
 ### Strategic Recommendations
