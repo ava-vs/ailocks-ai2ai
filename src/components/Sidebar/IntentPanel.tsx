@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, MapPin, Briefcase, ChevronDown, ChevronUp, BrainCircuit, Bot, HardDrive, Zap, Rss, Clock, CheckCircle, XCircle, LayoutGrid, Menu, ChevronLeft, ChevronRight, User, Trash2 } from 'lucide-react';
-import AilockWidget from '../Ailock/AilockWidget';
+import { Search, MapPin, Briefcase, Zap, Rss, Clock, LayoutGrid, Menu, ChevronLeft, ChevronRight, User, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useUserSession } from '../../hooks/useUserSession';
 import { deleteIntent } from '../../lib/api';
 import IntentDetailModal from '../Chat/IntentDetailModal';
+import { useAuth } from '@/hooks/useAuth';
 
 interface Intent {
   id: string;
@@ -31,6 +31,10 @@ interface IntentPanelProps {
 type Tab = 'nearby' | 'in-work' | 'my-intents';
 
 export default function IntentPanel({ isExpanded = false, setIsRightPanelExpanded }: IntentPanelProps) {
+  const { user: authUser } = useAuth();
+  const { currentUser, isAuthenticated, isLoading: isUserLoading } = useUserSession();
+  const displayUser = authUser || currentUser;
+
   const [activeTab, setActiveTab] = useState<Tab>('nearby');
   const [intents, setIntents] = useState<Intent[]>([]);
   const [inWorkIntents, setInWorkIntents] = useState<Intent[]>([]);
@@ -38,12 +42,13 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
   const [isLoadingIntents, setIsLoadingIntents] = useState(true);
   const [searchQuery, setSearchQuery] = useState<string | null>(null);
   const [dbStatus, setDbStatus] = useState<'connected' | 'error' | 'checking'>('checking');
-  const { currentUser, isAuthenticated, isLoading: isUserLoading } = useUserSession();
+  const [loadingMyIntents, setLoadingMyIntents] = useState(false);
+  const [loadingInWork, setLoadingInWork] = useState(false);
+  const [selectedIntent, setSelectedIntent] = useState<Intent | null>(null);
   const [notificationCount, setNotificationCount] = useState(0);
   const [deletingIntentId, setDeletingIntentId] = useState<string | null>(null);
 
   // Modal state
-  const [selectedIntent, setSelectedIntent] = useState<Intent | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Persisted storage key depends on user
@@ -51,9 +56,9 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
 
   // Load persisted In-Work intents on user change
   useEffect(() => {
-    if (currentUser?.id && currentUser.id !== 'loading') {
+    if (displayUser?.id && displayUser.id !== 'loading') {
       try {
-        const stored = localStorage.getItem(getStorageKey(currentUser.id));
+        const stored = localStorage.getItem(getStorageKey(displayUser.id));
         if (stored) {
           setInWorkIntents(JSON.parse(stored));
         }
@@ -61,14 +66,55 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
         console.warn('Failed to load persisted In-Work intents:', err);
       }
     }
-  }, [currentUser.id]);
+  }, [displayUser?.id]);
 
   // Helper to persist
   const persistInWork = (updated: Intent[]) => {
     try {
-      localStorage.setItem(getStorageKey(currentUser.id), JSON.stringify(updated));
+      localStorage.setItem(getStorageKey(displayUser.id), JSON.stringify(updated));
     } catch {}
   };
+
+  // --- ADD INTENT TO "IN WORK" (moved up for dependency order) ---
+  const addIntentToInWork = async (intent: Intent) => {
+    if (!displayUser?.id || displayUser.id === 'loading') return;
+    try {
+      const response = await fetch('/.netlify/functions/in-work-intents', {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ intentId: intent.id }),
+      });
+      if (!response.ok) throw new Error('Failed to add');
+      
+      setInWorkIntents(prev => [intent, ...prev]);
+      toast.success(`Moved "${intent.title}" to In Work.`);
+      closeIntentModal();
+
+    } catch (error) {
+      console.error('Failed to add intent to in-work:', error);
+      toast.error('Could not move intent to In Work.');
+    }
+  };
+
+  // --- HANDLE EVENT TO MOVE INTO "IN WORK" ---
+  const handleIntentInWork = useCallback((event: CustomEvent) => {
+    const intentToMove = event.detail;
+    addIntentToInWork(intentToMove);
+    setInWorkIntents(prev => {
+      if (prev.some(i => i.id === intentToMove.id)) {
+        toast.error('Intent is already in your "In Work" list.');
+        return prev;
+      }
+      const updated = [intentToMove, ...prev];
+      persistInWork(updated);
+      toast.success('Intent added to "In Work"');
+      return updated;
+    });
+    setActiveTab('in-work');
+  }, [persistInWork, addIntentToInWork]);
 
   const checkDbStatus = async () => {
     try {
@@ -93,7 +139,7 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
     console.log('New intent captured by IntentPanel:', newIntent);
     
     // Add to my intents if it's created by current user
-    if (newIntent.isOwn || newIntent.userId === currentUser.id) {
+    if (newIntent.isOwn || newIntent.userId === displayUser?.id) {
       setMyIntents(prev => [newIntent, ...prev]);
       setActiveTab('my-intents'); // Switch to My Intents tab
     } else {
@@ -128,23 +174,8 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
     }
   }, [isExpanded]);
 
-  const handleIntentInWork = useCallback((event: CustomEvent) => {
-    const intentToMove = event.detail;
-    setInWorkIntents(prev => {
-      if (prev.some(i => i.id === intentToMove.id)) {
-        toast.error('Intent is already in your "In Work" list.');
-        return prev;
-      }
-      const updated = [intentToMove, ...prev];
-      persistInWork(updated);
-      toast.success('Intent added to "In Work"');
-      return updated;
-    });
-    setActiveTab('in-work');
-  }, [persistInWork]);
-
   const handleDeleteIntent = async (intentId: string, intentTitle: string) => {
-    if (!currentUser?.id) {
+    if (!displayUser?.id) {
       toast.error('User not identified. Cannot delete.');
       return;
     }
@@ -155,7 +186,7 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
     setDeletingIntentId(intentId);
     
     try {
-      await deleteIntent(intentId, currentUser.id);
+      await deleteIntent(intentId, displayUser.id);
       
       // Remove from my intents
       setMyIntents(prev => prev.filter(intent => intent.id !== intentId));
@@ -178,7 +209,7 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
     setSearchQuery(null);
     // Reload "In Work" intents for the new user from localStorage
     try {
-      const stored = localStorage.getItem(getStorageKey(currentUser.id));
+      const stored = localStorage.getItem(getStorageKey(displayUser.id));
       setInWorkIntents(stored ? JSON.parse(stored) : []);
     } catch {
       setInWorkIntents([]);
@@ -189,7 +220,7 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
   };
 
   const fetchMyIntents = async () => {
-    if (!currentUser.id || currentUser.id === 'loading') return;
+    if (!displayUser.id || displayUser.id === 'loading') return;
     
     const isDbConnected = await checkDbStatus();
     if (!isDbConnected) {
@@ -199,7 +230,7 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
     }
 
     try {
-      const response = await fetch(`/.netlify/functions/intents-list?userId=${currentUser.id}&myIntents=true`);
+      const response = await fetch(`/.netlify/functions/intents-list?userId=${displayUser.id}&myIntents=true`);
       if (response.ok) {
         const res = await response.json();
         // API returns { intents: [...] }
@@ -327,7 +358,53 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
   };
 
   const handleStartWork = (intent: any) => {
-    window.dispatchEvent(new CustomEvent('intent-in-work', { detail: intent }));
+    if (intent.isOwn) {
+      toast.error("You cannot start work on your own intent.");
+      return;
+    }
+    addIntentToInWork(intent);
+  };
+
+  const fetchInWorkIntents = async () => {
+    if (!displayUser?.id || displayUser.id === 'loading') return;
+    setLoadingInWork(true);
+    try {
+      const response = await fetch('/.netlify/functions/in-work-intents', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
+      });
+      if (!response.ok) throw new Error('Failed to fetch');
+      const data = await response.json();
+      setInWorkIntents(data || []);
+    } catch (error) {
+      console.error('Failed to fetch in-work intents:', error);
+      toast.error("Could not load 'in-work' intents.");
+    } finally {
+      setLoadingInWork(false);
+    }
+  };
+  
+  const removeIntentFromInWork = async (intentId: string) => {
+    if (!displayUser?.id || displayUser.id === 'loading') return;
+    
+    const originalIntents = inWorkIntents;
+    setInWorkIntents(prev => prev.filter(i => i.id !== intentId));
+    
+    try {
+      const response = await fetch('/.netlify/functions/in-work-intents', {
+        method: 'DELETE',
+        headers: { 
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+          'Content-Type': 'application/json',
+         },
+        body: JSON.stringify({ intentId }),
+      });
+      if (!response.ok) throw new Error('Failed to remove');
+      toast.success('Intent removed from "In Work".');
+    } catch (error) {
+      console.error('Failed to remove intent from in-work:', error);
+      toast.error('Could not remove intent.');
+      setInWorkIntents(originalIntents);
+    }
   };
 
   if (!isExpanded) {
@@ -566,10 +643,18 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
               intents.length > 0 ? intents.map(intent => <IntentCard key={intent.id} intent={intent} />) : <EmptyState tab="nearby" />
             )}
             {activeTab === 'in-work' && (
-              inWorkIntents.length > 0 ? inWorkIntents.map(intent => <IntentCard key={intent.id} intent={intent} />) : <EmptyState tab="in-work" />
+              loadingInWork ? <LoadingSkeleton /> : inWorkIntents.length > 0 ? (
+                <div className="space-y-3">
+                  {inWorkIntents.map(intent => <IntentCard key={intent.id} intent={intent} />)}
+                </div>
+              ) : <EmptyState tab="in-work" />
             )}
             {activeTab === 'my-intents' && (
-              myIntents.length > 0 ? myIntents.map(intent => <IntentCard key={intent.id} intent={intent} showDeleteButton={true} />) : <EmptyState tab="my-intents" />
+              loadingMyIntents ? <LoadingSkeleton /> : myIntents.length > 0 ? (
+                <div className="space-y-3">
+                  {myIntents.map(intent => <IntentCard key={intent.id} intent={intent} showDeleteButton={true} />)}
+                </div>
+              ) : <EmptyState tab="my-intents" />
             )}
           </div>
         )}

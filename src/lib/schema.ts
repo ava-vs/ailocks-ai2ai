@@ -1,4 +1,17 @@
-import { pgTable, uuid, varchar, text, timestamp, integer, boolean, vector, jsonb } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  text,
+  varchar,
+  uuid,
+  timestamp,
+  pgEnum,
+  vector,
+  jsonb,
+  integer,
+  boolean,
+  primaryKey
+} from 'drizzle-orm/pg-core';
+import { relations } from 'drizzle-orm';
 
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -45,6 +58,16 @@ export const intents = pgTable('intents', {
   embeddingGeneratedAt: timestamp('embedding_generated_at'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow()
+});
+
+export const userInWorkIntents = pgTable('user_in_work_intents', {
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  intentId: uuid('intent_id').notNull().references(() => intents.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => {
+  return {
+    pk: primaryKey({ columns: [table.userId, table.intentId] }),
+  };
 });
 
 export const offers = pgTable('offers', {
