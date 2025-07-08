@@ -1,7 +1,8 @@
 import React from 'react';
-import { X, Star, Trophy, TrendingUp } from 'lucide-react';
+import { X, Star, Trophy, TrendingUp, CheckCircle2 } from 'lucide-react';
 import type { FullAilockProfile } from '@/lib/ailock/shared';
 import { getLevelInfo } from '@/lib/ailock/shared';
+import { useDailyTasks } from '@/hooks/useDailyTasks';
 
 interface AilockQuickStatusProps {
   isOpen: boolean;
@@ -14,12 +15,7 @@ export default function AilockQuickStatus({ isOpen, onClose, profile, onOpenFull
   if (!isOpen || !profile) return null;
 
   const levelInfo = getLevelInfo(profile.xp);
-  console.log('🔍 AilockQuickStatus Level Info:', {
-    currentXp: profile.xp,
-    dbLevel: profile.level,
-    calculatedLevel: levelInfo.level,
-    levelInfo
-  });
+  const { tasks: dailyTasks, loading: tasksLoading } = useDailyTasks();
 
   const getAvatarGradient = () => {
     if (profile.level >= 15) return 'from-purple-400 via-pink-400 to-yellow-400';
@@ -28,14 +24,7 @@ export default function AilockQuickStatus({ isOpen, onClose, profile, onOpenFull
     return 'from-cyan-400 via-blue-400 to-indigo-400';
   };
 
-  // Daily tasks simulation
-  const dailyTasks = [
-    { id: 1, text: 'Create intent', completed: false, xp: 30 },
-    { id: 2, text: 'Process 20 user queries', completed: false, xp: 100 },
-    { id: 3, text: 'Generate insights', completed: false, xp: 75 }
-  ];
-
-  const completedTasks = dailyTasks.filter(task => task.completed).length;
+  const completedTasks = dailyTasks.filter(task => task.status === 'completed').length;
 
   return (
     <>
@@ -99,30 +88,52 @@ export default function AilockQuickStatus({ isOpen, onClose, profile, onOpenFull
 
           {/* Today's Task */}
           <div className="mb-6">
-            <h4 className="text-base font-medium text-white mb-4">Today's Task</h4>
-            <div className="space-y-3">
-              {dailyTasks.map((task) => (
-                <div key={task.id} className="flex items-center space-x-3">
-                  <div className={`w-5 h-5 rounded flex items-center justify-center ${
-                    task.completed 
-                      ? 'bg-green-500/20 text-green-400' 
-                      : 'bg-white/10 text-white/40'
-                  }`}>
-                    {task.completed && '✓'}
-                  </div>
-                  <span className={`text-sm flex-1 ${
-                    task.completed ? 'text-white/60 line-through' : 'text-white/80'
-                  }`}>
-                    {task.text}
-                  </span>
-                  <span className="text-sm text-green-400">{task.xp} XP</span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 flex items-center justify-between text-sm">
-              <span className="text-white/60">Progress</span>
-              <span className="text-blue-400">{completedTasks}/{dailyTasks.length} completed</span>
-            </div>
+            <h4 className="text-base font-medium text-white mb-4">Today's Tasks</h4>
+            {tasksLoading ? (
+              <div className="text-center text-white/60">Loading tasks...</div>
+            ) : (
+              <div className="space-y-3">
+                {dailyTasks.length > 0 ? dailyTasks.slice(0, 3).map((task) => {
+                  const isCompleted = task.status === 'completed';
+                  const progress = task.definition ? (task.progressCount / task.definition.triggerCountGoal) * 100 : 0;
+                  return (
+                    <div key={task.id} className="flex items-center space-x-3 group">
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
+                        isCompleted
+                          ? 'bg-green-500' 
+                          : 'bg-white/10 ring-2 ring-white/20'
+                      }`}>
+                        {isCompleted && <CheckCircle2 className="w-4 h-4 text-white" />}
+                      </div>
+                      <div className="flex-1">
+                        <span className={`text-sm ${
+                          isCompleted ? 'text-white/60 line-through' : 'text-white/80'
+                        }`}>
+                          {task.definition?.name || task.taskId}
+                        </span>
+                        {!isCompleted && task.definition && task.definition.triggerCountGoal > 1 && (
+                           <div className="w-full bg-white/10 rounded-full h-1 mt-1 overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-cyan-400 to-blue-500"
+                              style={{ width: `${progress}%` }}
+                            ></div>
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-sm text-green-400 font-medium">
+                        {task.definition?.xpReward || ''} XP
+                      </span>
+                    </div>
+                  );
+                }) : <p className="text-sm text-white/60 text-center">No tasks for today. Check back tomorrow!</p>}
+              </div>
+            )}
+            {dailyTasks.length > 0 && (
+              <div className="mt-4 flex items-center justify-between text-sm">
+                <span className="text-white/60">Progress</span>
+                <span className="text-blue-400">{completedTasks}/{dailyTasks.length} completed</span>
+              </div>
+            )}
           </div>
 
           {/* Action Buttons */}

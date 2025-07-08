@@ -70,6 +70,30 @@ export interface FullAilockProfile extends AilockProfile {
   totalInteractions: number;
 }
 
+export interface TaskDefinition {
+  id: string;
+  name: string;
+  description: string | null;
+  eventTypeTrigger: string;
+  triggerCountGoal: number;
+  xpReward: number;
+  category: string | null;
+  unlockLevelRequirement: number | null;
+}
+
+export interface UserTask {
+  id: string;
+  userId: string;
+  taskId: string;
+  assignedDate: string;
+  progressCount: number;
+  status: string;
+  completedAt: Date | null;
+  claimedAt: Date | null;
+  // Joined definition for convenience
+  definition?: TaskDefinition;
+}
+
 export type XpEventType = 
   | 'chat_message_sent'
   | 'voice_message_sent'
@@ -85,25 +109,26 @@ export type XpEventType =
   | 'ailock_message_helpful'
   | 'intent_clarification_provided'
   | 'collaboration_initiated'
-  | 'collaboration_success';
+  | 'collaboration_success'
+  | 'daily_task_completed';
 
-// This is safe for the client as it's just a constant object.
 export const XP_REWARDS: Record<XpEventType, number> = {
-  chat_message_sent: 5,
-  voice_message_sent: 10,
-  intent_created: 30,
-  intent_deleted: -30,
+  chat_message_sent: 1,
+  voice_message_sent: 2,
+  intent_created: 10,
+  intent_deleted: -2,
   skill_used_successfully: 15,
   achievement_unlocked: 50,
-  project_started: 30,
-  project_completed: 200,
+  project_started: 25,
+  project_completed: 100,
   first_login_today: 10,
-  // AI2AI Interaction Events
-  ailock_message_sent: 8,
-  ailock_message_helpful: 15,
-  intent_clarification_provided: 25,
-  collaboration_initiated: 50,
-  collaboration_success: 100
+  // AI2AI
+  ailock_message_sent: 2,
+  ailock_message_helpful: 5,
+  intent_clarification_provided: 20,
+  collaboration_initiated: 30,
+  collaboration_success: 150,
+  daily_task_completed: 0, // XP is awarded dynamically from the task definition
 };
 
 // --- Client-Safe Functions ---

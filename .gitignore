@@ -29,3 +29,6 @@ dist-ssr
 .astro/content.d.ts
 .astro/types.d.ts
 .astro/
+
+docs/Взаимодействие ИИ-помощников Ailocks_ архитектура_.md
+docs/Go-to-Market Стратегия для MVP Ailocks.md

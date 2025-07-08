@@ -7,7 +7,8 @@ import { SKILL_TREE, BRANCH_COLORS } from '@/lib/ailock/skills';
 import AilockAvatar from './AilockAvatar';
 import CharacteristicsPanel from './CharacteristicsPanel';
 import SkillTreeCanvas from './SkillTreeCanvas';
-import { ArrowLeft, Star, Zap, Trophy, TrendingUp, CheckCircle, Clock, Award, Brain, Sparkles, Crown, Target, Cpu, Search, BrainCircuit } from 'lucide-react';
+import { useDailyTasks } from '@/hooks/useDailyTasks';
+import { ArrowLeft, Star, Zap, Trophy, TrendingUp, CheckCircle, Clock, Award, Brain, Sparkles, Crown, Target, Cpu, Search, BrainCircuit, Loader2 } from 'lucide-react';
 
 export default function MyAilockPage() {
   const { currentUser } = useUserSession();
@@ -16,6 +17,7 @@ export default function MyAilockPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'skills' | 'achievements'>('overview');
   const [hoveredSkill, setHoveredSkill] = useState<string | null>(null);
+  const { tasks: dailyTasks, loading: tasksLoading, error: tasksError } = useDailyTasks();
 
   // Load Ailock profile once the authenticated user's ID is available
   useEffect(() => {
@@ -95,13 +97,6 @@ export default function MyAilockPage() {
     if (profile.level >= 5) return 'from-green-400 via-blue-400 to-purple-400';
     return 'from-cyan-400 via-blue-400 to-indigo-400';
   };
-
-  // Daily tasks based on XP event types
-  const dailyTasks = [
-    { id: 1, text: 'Analyze market trends', completed: false, xp: 50 },
-    { id: 2, text: 'Process user queries', completed: false, xp: 100 },
-    { id: 3, text: 'Generate insights', completed: false, xp: 75 }
-  ];
 
   // Premium tasks based on skill tree
   const premiumTasks = [
@@ -260,18 +255,57 @@ export default function MyAilockPage() {
           
           {/* Today's Tasks */}
           <div className="bg-white/5 border border-white/10 rounded-xl p-6">
-            <h3 className="text-xl font-semibold text-white mb-4">Today's Task</h3>
-            <div className="space-y-2">
-              {dailyTasks.map((task) => (
-                <div key={task.id} className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <input type="checkbox" checked={task.completed} onChange={() => {}} className="w-5 h-5 text-blue-500 bg-transparent border-white/30 rounded focus:ring-blue-500" />
-                    <span className={`text-base ${task.completed ? 'text-white/60 line-through' : 'text-white/80'}`}>{task.text}</span>
-                  </div>
-                  <span className="text-emerald-400 text-base font-medium">{task.xp} XP</span>
-                </div>
-              ))}
-            </div>
+            <h3 className="text-xl font-semibold text-white mb-4">Today's Tasks</h3>
+            {tasksLoading ? (
+              <div className="flex justify-center items-center h-24">
+                <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+              </div>
+            ) : tasksError ? (
+               <div className="text-center text-red-400 bg-red-500/10 p-4 rounded-lg">
+                <p>Could not load tasks.</p>
+                <p className="text-sm">{tasksError}</p>
+              </div>
+            ) : dailyTasks.length > 0 ? (
+              <div className="space-y-2">
+                {dailyTasks.map((task) => {
+                  const isCompleted = task.status === 'completed';
+                  const progress = task.definition ? (task.progressCount / task.definition.triggerCountGoal) * 100 : 0;
+                  return (
+                    <div key={task.id} className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
+                          isCompleted
+                            ? 'bg-green-500' 
+                            : 'bg-white/10 ring-1 ring-white/20'
+                        }`}>
+                          {isCompleted && <CheckCircle className="w-4 h-4 text-white" />}
+                        </div>
+                        <div>
+                          <span className={`text-base ${isCompleted ? 'text-white/60 line-through' : 'text-white/80'}`}>
+                            {task.definition?.name || task.taskId}
+                          </span>
+                           {!isCompleted && task.definition && task.definition.triggerCountGoal > 1 && (
+                            <div className="w-full bg-white/10 rounded-full h-1 mt-1 overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-cyan-400 to-blue-500"
+                                style={{ width: `${progress}%` }}
+                              ></div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-emerald-400 text-base font-medium">{task.definition?.xpReward} XP</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center text-white/60 py-8">
+                <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
+                <p className="font-semibold">All tasks completed for today!</p>
+                <p className="text-sm text-white/50">Check back tomorrow for new challenges.</p>
+              </div>
+            )}
           </div>
         </div>
 

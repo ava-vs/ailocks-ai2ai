@@ -9,7 +9,10 @@ import {
   jsonb,
   integer,
   boolean,
-  primaryKey
+  primaryKey,
+  date,
+  unique,
+  index
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -215,3 +218,136 @@ export const ailockInteractions = pgTable('ailock_interactions', {
   readAt: timestamp('read_at'),
   respondedAt: timestamp('responded_at')
 });
+
+export const taskDefinitions = pgTable('task_definitions', {
+  id: varchar('id', { length: 100 }).primaryKey(),
+  name: varchar('name', { length: 255 }).notNull(),
+  description: text('description'),
+  eventTypeTrigger: varchar('event_type_trigger', { length: 100 }).notNull(),
+  triggerCountGoal: integer('trigger_count_goal').default(1).notNull(),
+  xpReward: integer('xp_reward').notNull(),
+  category: varchar('category', { length: 50 }).default('daily'),
+  unlockLevelRequirement: integer('unlock_level_requirement').default(1),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const userTasks = pgTable('user_tasks', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  taskId: varchar('task_id', { length: 100 }).notNull().references(() => taskDefinitions.id),
+  assignedDate: date('assigned_date').notNull(),
+  progressCount: integer('progress_count').default(0),
+  status: varchar('status', { length: 20 }).default('in_progress'), // 'in_progress', 'completed', 'claimed'
+  completedAt: timestamp('completed_at'),
+  claimedAt: timestamp('claimed_at'),
+}, (table) => {
+  return {
+    uniqueUserTaskDate: unique('user_tasks_user_id_task_id_assigned_date_unique').on(table.userId, table.taskId, table.assignedDate),
+    userStatusIdx: index('idx_user_tasks_user_status').on(table.userId, table.status),
+    userDateIdx: index('idx_user_tasks_user_date').on(table.userId, table.assignedDate),
+  };
+});
+
+// RELATIONS
+
+export const usersRelations = relations(users, ({ one, many }) => ({
+	ailock: one(ailocks, {
+    fields: [users.id],
+    references: [ailocks.userId],
+  }),
+	chatSessions: many(chatSessions),
+	intents: many(intents),
+  userInWorkIntents: many(userInWorkIntents),
+  offers: many(offers),
+  steps: many(chainSteps),
+  chatSummary: one(chatSummaries, {
+    fields: [users.id],
+    references: [chatSummaries.userId]
+  }),
+  userTasks: many(userTasks),
+}));
+
+export const ailocksRelations = relations(ailocks, ({ one, many }) => ({
+  user: one(users, {
+    fields: [ailocks.userId],
+    references: [users.id],
+  }),
+  skills: many(ailockSkills),
+  xpHistory: many(ailockXpHistory),
+  achievements: many(ailockAchievements),
+  sentInteractions: many(ailockInteractions, { relationName: 'fromAilock'}),
+  receivedInteractions: many(ailockInteractions, { relationName: 'toAilock'}),
+}));
+
+export const ailockSkillsRelations = relations(ailockSkills, ({ one }) => ({
+  ailock: one(ailocks, {
+    fields: [ailockSkills.ailockId],
+    references: [ailocks.id],
+  }),
+}));
+
+export const ailockXpHistoryRelations = relations(ailockXpHistory, ({ one }) => ({
+  ailock: one(ailocks, {
+    fields: [ailockXpHistory.ailockId],
+    references: [ailocks.id],
+  }),
+}));
+
+export const ailockAchievementsRelations = relations(ailockAchievements, ({ one }) => ({
+  ailock: one(ailocks, {
+    fields: [ailockAchievements.ailockId],
+    references: [ailocks.id],
+  }),
+}));
+
+export const intentsRelations = relations(intents, ({ one, many }) => ({
+  user: one(users, {
+    fields: [intents.userId],
+    references: [users.id],
+  }),
+  smartChain: one(smartChains, {
+    fields: [intents.id],
+    references: [smartChains.rootIntentId]
+  }),
+  userInWorkIntents: many(userInWorkIntents),
+}));
+
+export const userInWorkIntentsRelations = relations(userInWorkIntents, ({ one }) => ({
+  user: one(users, {
+    fields: [userInWorkIntents.userId],
+    references: [users.id],
+  }),
+  intent: one(intents, {
+    fields: [userInWorkIntents.intentId],
+    references: [intents.id],
+  }),
+}));
+
+export const ailockInteractionsRelations = relations(ailockInteractions, ({ one }) => ({
+  fromAilock: one(ailocks, {
+    fields: [ailockInteractions.fromAilockId],
+    references: [ailocks.id],
+    relationName: 'fromAilock'
+  }),
+  toAilock: one(ailocks, {
+    fields: [ailockInteractions.toAilockId],
+    references: [ailocks.id],
+    relationName: 'toAilock'
+  }),
+}));
+
+export const taskDefinitionsRelations = relations(taskDefinitions, ({ many }) => ({
+  userTasks: many(userTasks),
+}));
+
+export const userTasksRelations = relations(userTasks, ({ one }) => ({
+  user: one(users, {
+    fields: [userTasks.userId],
+    references: [users.id],
+  }),
+  taskDefinition: one(taskDefinitions, {
+    fields: [userTasks.taskId],
+    references: [taskDefinitions.id],
+  }),
+}));

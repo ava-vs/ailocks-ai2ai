@@ -1,8 +1,8 @@
-import { db } from '../db';
-import { ailocks, ailockSkills, ailockXpHistory, ailockAchievements, intents, chatSessions } from '../schema';
-import { eq, desc, count } from 'drizzle-orm';
+import { db, withDbRetry } from '../db';
+import { ailocks, ailockSkills, ailockXpHistory, ailockAchievements, intents, chatSessions, userTasks, taskDefinitions } from '../schema';
+import { eq, desc, count, and, sql, inArray, notInArray, gte, lte } from 'drizzle-orm';
 import { SKILL_TREE, canUnlockSkill } from './skills';
-import type { FullAilockProfile, AilockProfile, XpEventType, AilockSkill, AilockAchievement, XpEvent } from './shared';
+import type { FullAilockProfile, AilockProfile, XpEventType, AilockSkill, AilockAchievement, XpEvent, UserTask, TaskDefinition } from './shared';
 import { getLevelInfo, XP_REWARDS } from './shared';
 
 // XP progression logic
@@ -161,8 +161,8 @@ export class AilockService {
   }
 
   async gainXp(ailockId: string, eventType: XpEventType, context: Record<string, any> = {}) {
-    const xpGained = XP_REWARDS[eventType] || 0;
-    if (xpGained === 0) return { success: false, reason: 'No XP for this event.' };
+    const xpGained = context.xpGained || XP_REWARDS[eventType] || 0;
+    if (xpGained === 0 && eventType !== 'daily_task_completed') return { success: false, reason: 'No XP for this event.' };
 
     // Get ailock with retry mechanism
     let ailock: any[] = [];
@@ -204,6 +204,16 @@ export class AilockService {
       skillPointsGained = newLevelInfo.level - oldLevelInfo.level; // 1 point per level
     }
     
+    // Don't update task progress for task completion events to avoid loops
+    if (eventType !== 'daily_task_completed') {
+      const ailockForTask = await db.query.ailocks.findFirst({ where: eq(ailocks.id, ailockId), columns: { userId: true } });
+      if (ailockForTask) {
+        this.updateTaskProgress(ailockForTask.userId, eventType).catch(err => {
+          console.error(`[AilockService] Failed to update task progress for user ${ailockForTask.userId}`, err);
+        });
+      }
+    }
+
     // Update profile in DB with retry
     let updatedAilocks: any[] = [];
     attempt = 0;
@@ -448,6 +458,155 @@ export class AilockService {
   private async checkAchievements(_ailockId: string): Promise<AilockAchievement[]> {
     // Placeholder for future achievement logic
     return [];
+  }
+
+  // ============== Daily Task Service Logic ==============
+
+  async getTasksForUser(userId: string): Promise<UserTask[]> {
+    const today = new Date().toISOString().slice(0, 10);
+
+    let tasksResult = await db.query.userTasks.findMany({
+      where: and(eq(userTasks.userId, userId), eq(userTasks.assignedDate, today)),
+      with: {
+        taskDefinition: true
+      }
+    });
+
+    if (tasksResult.length === 0) {
+      await this._assignTasksForUser(userId, today);
+      tasksResult = await db.query.userTasks.findMany({
+        where: and(eq(userTasks.userId, userId), eq(userTasks.assignedDate, today)),
+        with: {
+          taskDefinition: true
+        }
+      });
+    }
+
+    return tasksResult.map((t): UserTask => ({
+      id: t.id,
+      userId: t.userId,
+      taskId: t.taskId,
+      assignedDate: t.assignedDate,
+      progressCount: t.progressCount || 0,
+      status: t.status || 'in_progress',
+      completedAt: t.completedAt,
+      claimedAt: t.claimedAt,
+      definition: t.taskDefinition,
+    }));
+  }
+
+  private async _assignTasksForUser(userId: string, today: string) {
+    const ailockProfile = await this.getOrCreateAilock(userId);
+
+    // 1. Assign onboarding tasks if needed
+    const completedOnboardingTasks = await db.select({ taskId: userTasks.taskId })
+      .from(userTasks)
+      .leftJoin(taskDefinitions, eq(userTasks.taskId, taskDefinitions.id))
+      .where(and(
+        eq(userTasks.userId, userId),
+        eq(taskDefinitions.category, 'onboarding'),
+        eq(userTasks.status, 'completed')
+      ));
+
+    const completedOnboardingIds = completedOnboardingTasks.map(t => t.taskId);
+
+    const onboardingTasksToAssign = await db.select()
+      .from(taskDefinitions)
+      .where(and(
+        eq(taskDefinitions.category, 'onboarding'),
+        eq(taskDefinitions.isActive, true),
+        completedOnboardingIds.length > 0 ? notInArray(taskDefinitions.id, completedOnboardingIds) : sql`true`
+      ))
+      .orderBy(taskDefinitions.unlockLevelRequirement)
+      .limit(2);
+
+    // 2. Assign daily tasks
+    const dailyTasksToAssign = await db.select()
+      .from(taskDefinitions)
+      .where(and(
+        eq(taskDefinitions.category, 'daily'),
+        eq(taskDefinitions.isActive, true),
+        lte(taskDefinitions.unlockLevelRequirement, ailockProfile.level)
+      ))
+      .orderBy(sql`RANDOM()`)
+      .limit(3);
+    
+    const allTasksToAssign = [...onboardingTasksToAssign, ...dailyTasksToAssign];
+
+    if (allTasksToAssign.length > 0) {
+      const newTasks = allTasksToAssign.map(task => ({
+        userId,
+        taskId: task.id,
+        assignedDate: today,
+        status: 'in_progress',
+        progressCount: 0,
+      }));
+      await db.insert(userTasks).values(newTasks).onConflictDoNothing();
+      console.log(`[AilockService] Assigned ${newTasks.length} tasks to user ${userId} for ${today}.`);
+    }
+  }
+
+  async updateTaskProgress(userId: string, eventType: XpEventType) {
+    const today = new Date().toISOString().slice(0, 10);
+
+    const activeTasks = await db.query.userTasks.findMany({
+      where: and(
+        eq(userTasks.userId, userId),
+        eq(userTasks.status, 'in_progress'),
+        eq(userTasks.assignedDate, today)
+      ),
+      with: {
+        taskDefinition: true
+      }
+    });
+
+    const tasksToUpdate = activeTasks.filter(
+      (t) => t.taskDefinition && t.taskDefinition.eventTypeTrigger === eventType
+    );
+
+    if (tasksToUpdate.length === 0) {
+      return;
+    }
+
+    const taskIdsToIncrement = tasksToUpdate.map(t => t.id);
+    await db.update(userTasks)
+      .set({ progressCount: sql`${userTasks.progressCount} + 1` })
+      .where(inArray(userTasks.id, taskIdsToIncrement));
+    
+    // Check for completion
+    const updatedTasks = await db.query.userTasks.findMany({
+        where: inArray(userTasks.id, taskIdsToIncrement),
+        with: { taskDefinition: true }
+    });
+
+    for (const task of updatedTasks) {
+      const definition = task.taskDefinition;
+      if (!definition) continue;
+
+      if ((task.progressCount || 0) >= definition.triggerCountGoal) {
+        // Prevent re-completion
+        if (task.status === 'completed') continue;
+
+        await db.update(userTasks)
+          .set({ status: 'completed', completedAt: new Date() })
+          .where(eq(userTasks.id, task.id));
+        
+        console.log(`[AilockService] Task '${definition.name}' completed for user ${userId}.`);
+        
+        // Find ailockId for the user
+        const ailock = await db.query.ailocks.findFirst({where: eq(ailocks.userId, userId), columns: { id: true }});
+        if (!ailock) continue;
+
+        // Award XP
+        await this.gainXp(ailock.id, 'daily_task_completed', { 
+          xpGained: definition.xpReward,
+          taskId: task.taskId,
+          taskName: definition.name,
+        });
+        
+        // TODO: Send real-time notification to the user
+      }
+    }
   }
 }
 
