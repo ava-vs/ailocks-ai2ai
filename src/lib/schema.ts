@@ -249,6 +249,27 @@ export const userTasks = pgTable('user_tasks', {
   };
 });
 
+export const notifications = pgTable('notifications', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  type: varchar('type', { length: 50 }).notNull(), // 'message', 'invite', 'intent'
+  title: varchar('title', { length: 255 }).notNull(),
+  message: text('message').notNull(),
+  groupId: uuid('group_id').references(() => users.id, { onDelete: 'set null' }),
+  senderId: uuid('sender_id').references(() => users.id, { onDelete: 'set null' }),
+  read: boolean('read').default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => {
+  return {
+    userIdx: index('idx_notifications_user_id').on(table.userId),
+    groupIdx: index('idx_notifications_group_id').on(table.groupId),
+    readIdx: index('idx_notifications_read').on(table.read),
+    typeIdx: index('idx_notifications_type').on(table.type),
+    createdAtIdx: index('idx_notifications_created_at').on(table.createdAt),
+  };
+});
+
 // RELATIONS
 
 export const usersRelations = relations(users, ({ one, many }) => ({

@@ -6,7 +6,6 @@
 import type { Handler, HandlerEvent, HandlerResponse } from '@netlify/functions';
 import { verifyToken, getAuthTokenFromHeaders } from '../../src/lib/auth/auth-utils';
 import { notificationService } from '../../src/lib/ailock/notification-service';
-import { sendEventToClients } from './notifications-sse';
 
 function responseWithCORS(statusCode: number, body: any): HandlerResponse {
   return {
@@ -130,16 +129,16 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
       );
 
       // Отправляем событие через SSE
-      sendEventToClients({
-        type: 'notification',
-        id: notification.id,
-        notificationType: notification.type,
-        title: notification.title,
-        message: notification.message,
-        groupId: notification.group_id,
-        senderId: notification.sender_id,
-        createdAt: notification.created_at.toISOString()
-      }, targetUserId);
+      // sendEventToClients({
+      //   type: 'notification',
+      //   id: notification.id,
+      //   notificationType: notification.type,
+      //   title: notification.title,
+      //   message: notification.message,
+      //   groupId: notification.group_id,
+      //   senderId: notification.sender_id,
+      //   createdAt: notification.created_at.toISOString()
+      // }, targetUserId);
 
       return responseWithCORS(201, { notification });
     }

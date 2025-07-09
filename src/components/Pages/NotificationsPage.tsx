@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Bell, CheckCircle, AlertCircle } from 'lucide-react';
+import useNotifications, { type Notification } from '@/hooks/useNotifications';
+import { Bell, MessageSquare, UserPlus, FileText, CheckCircle, Trash2 } from 'lucide-react';
 
 interface NotificationItem {
   id: string;
@@ -10,45 +10,54 @@ interface NotificationItem {
 }
 
 export default function NotificationsPage() {
-  const [notifications] = useState<NotificationItem[]>([
-    {
-      id: '1',
-      title: 'Welcome to Ailocks!',
-      message: 'Thanks for joining the Ai2Ai network. Explore collaboration opportunities nearby.',
-      timestamp: new Date().toISOString(),
-      type: 'success'
-    },
-    {
-      id: '2',
-      title: 'Database connected',
-      message: 'Live database connection restored.',
-      timestamp: new Date(Date.now() - 3600 * 1000).toISOString(),
-      type: 'info'
-    }
-  ]);
+  const { notifications, loading, error, markAsRead, markAllAsRead } = useNotifications();
 
-  const getIcon = (type: NotificationItem['type']) => {
+  const getIcon = (type: Notification['type']) => {
     switch (type) {
-      case 'success':
-        return <CheckCircle className="w-5 h-5 text-green-400" />;
-      case 'warning':
-        return <AlertCircle className="w-5 h-5 text-yellow-400" />;
+      case 'invite':
+        return <UserPlus className="h-5 w-5 text-blue-400" />;
+      case 'message':
+        return <MessageSquare className="h-5 w-5 text-green-400" />;
+      case 'intent':
+        return <FileText className="h-5 w-5 text-purple-400" />;
       default:
-        return <Bell className="w-5 h-5 text-blue-400" />;
+        return <Bell className="h-5 w-5 text-gray-400" />;
     }
   };
 
-  const formatTimeAgo = (iso: string) => {
-    const date = new Date(iso);
-    const diff = Date.now() - date.getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'just now';
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    const days = Math.floor(hrs / 24);
-    return `${days}d ago`;
+  const formatTimeAgo = (dateInput: string | Date | undefined | null) => {
+    if (!dateInput) return '';
+    try {
+      const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+      if (!date || isNaN(date.getTime())) {
+        console.error('Invalid date provided to formatTimeAgo:', dateInput);
+        return 'Invalid Date';
+      }
+      const now = new Date();
+      const diff = now.getTime() - date.getTime();
+
+      const seconds = Math.floor(diff / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+
+      if (days > 0) return `${days}д назад`;
+      if (hours > 0) return `${hours}ч назад`;
+      if (minutes > 0) return `${minutes}м назад`;
+      return 'только что';
+    } catch (e) {
+      console.error('Error formatting date:', e);
+      return 'Invalid Date';
+    }
   };
+
+  if (loading) {
+    return <div className="text-center py-8">Loading notifications...</div>;
+  }
+
+  if (error) {
+    return <div className="text-center py-8 text-red-400">{error.message}</div>;
+  }
 
   return (
     <div className="h-full flex flex-col bg-gradient-to-br from-slate-900/95 to-slate-800/95 backdrop-blur-xl overflow-y-auto p-8">
@@ -59,16 +68,26 @@ export default function NotificationsPage() {
           <p className="text-white/70">You have no notifications right now.</p>
         ) : (
           <ul className="space-y-4">
-            {notifications.map((n) => (
-              <li key={n.id} className="flex items-start gap-4 bg-white/5 border border-white/10 rounded-xl p-4">
-                <div className="mt-1">
-                  {getIcon(n.type)}
+            {notifications.map((item) => (
+              <li key={item.id} className="flex items-start gap-4 bg-white/5 border border-white/10 rounded-xl p-4">
+                <div className="flex-shrink-0">
+                  {getIcon(item.type)}
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-white font-semibold mb-1">{n.title}</h3>
-                  <p className="text-white/70 text-sm mb-1">{n.message}</p>
-                  <span className="text-xs text-white/40">{formatTimeAgo(n.timestamp)}</span>
+                  <p className="font-semibold text-white">{item.title}</p>
+                  <p className="text-sm text-gray-300" style={{ whiteSpace: 'pre-wrap' }}>{item.message}</p>
                 </div>
+                <p className="text-sm text-gray-400 whitespace-nowrap">
+                  {formatTimeAgo(item.createdAt)}
+                </p>
+                {!item.read && (
+                  <button
+                    onClick={() => markAsRead(item.id)}
+                    className="text-xs text-blue-400 hover:underline"
+                  >
+                    Mark as read
+                  </button>
+                )}
               </li>
             ))}
           </ul>

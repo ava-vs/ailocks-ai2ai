@@ -22,27 +22,17 @@ function detectLanguage(acceptLanguage: string | null, country: string | null): 
 }
 
 export default async (request: Request, context: Context) => {
-  const url = new URL(request.url);
-  
-  // Skip for API routes, static assets, and Netlify functions
-  if (url.pathname.startsWith('/api/') || 
-      url.pathname.startsWith('/.netlify/') ||
-      url.pathname.includes('.') ||
-      url.pathname.startsWith('/_astro/')) {
-    return context.next();
-  }
+  const response = await context.next();
 
-  // For now, don't redirect - just pass language info in headers
-  // The React components will handle language switching client-side
   const acceptLang = request.headers.get('accept-language');
   const country = context.geo?.country?.code;
-  const detectedLang = detectLanguage(acceptLang, country);
+
+  // Ensure undefined values are converted to null for the function call
+  const detectedLang = detectLanguage(acceptLang ?? null, country ?? null);
   
-  const response = await context.next();
-  
-  // Add detected language to response headers for client-side use
-  response.headers.set('X-Detected-Language', detectedLang);
-  
+  // Set a cookie with the detected language
+  response.headers.set('Set-Cookie', `nf_lang=${detectedLang}; Path=/; Max-Age=604800`); // 7 days
+
   return response;
 };
 
