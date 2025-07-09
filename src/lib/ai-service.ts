@@ -199,7 +199,8 @@ export class UnifiedAIService {
         temperature: 0.7,
       });
 
-      return response.choices[0]?.message?.content || '';
+      // Проверяем наличие ответа и массива choices перед обращением к элементу
+      return response?.choices?.[0]?.message?.content || '';
     }
   }
 

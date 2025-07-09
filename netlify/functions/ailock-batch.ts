@@ -1,7 +1,8 @@
 import type { Handler, HandlerEvent, HandlerResponse } from '@netlify/functions';
-import { verifyToken } from '../../src/lib/auth/auth-utils';
+import { verifyToken, getAuthTokenFromHeaders } from '../../src/lib/auth/auth-utils';
 import { AilockService } from '../../src/lib/ailock/core';
 import { AilockMessageService } from '../../src/lib/ailock/message-service';
+import { GroupService } from '../../src/lib/ailock/group-service';
 
 function responseWithCORS(statusCode: number, body: any): HandlerResponse {
   return {
@@ -17,12 +18,16 @@ function responseWithCORS(statusCode: number, body: any): HandlerResponse {
 }
 
 async function getUserAilockId(event: HandlerEvent): Promise<string | null> {
+  let token: string | null = null;
   const authHeader = event.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
+  if (authHeader?.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
+  } else {
+    token = getAuthTokenFromHeaders(event.headers);
+  }
+  if (!token) {
     return null;
   }
-
-  const token = authHeader.substring(7);
   const payload = verifyToken(token);
   if (!payload) {
     return null;
@@ -66,6 +71,7 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
     // Initialize services
     const ailockService = new AilockService();
     const messageService = new AilockMessageService();
+    const groupService = new GroupService();
 
     // Process all requests in parallel for better performance
     const results = await Promise.allSettled(
@@ -136,10 +142,10 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
               if (!req.query) {
                 throw new Error('Missing query for search_ailocks operation');
               }
-              const searchResults = await messageService.searchAilocksByName(req.query);
+              const ailockSearchResults = await messageService.searchAilocksByName(req.query);
               return {
                 type: 'search_ailocks',
-                data: searchResults
+                data: ailockSearchResults
               };
 
             case 'reply_to_message':
@@ -211,6 +217,102 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
                   successful: archiveSuccessCount,
                   note: 'Archived as read (archive feature coming soon)'
                 }
+              };
+
+            // Групповые операции
+            case 'get_user_groups':
+              const groups = await groupService.getUserGroups(
+                userAilockId, 
+                req.type || undefined
+              );
+              return {
+                type: 'get_user_groups',
+                data: { groups }
+              };
+
+            case 'get_group_members':
+              if (!req.groupId) {
+                throw new Error('Missing groupId for get_group_members operation');
+              }
+              // Проверяем права доступа
+              const hasMembersAccess = await groupService.checkMemberPermission(
+                req.groupId,
+                userAilockId,
+                ['owner', 'admin', 'member', 'guest']
+              );
+              
+              if (!hasMembersAccess) {
+                throw new Error('Permission denied');
+              }
+              
+              const members = await groupService.getGroupMembers(req.groupId);
+              return {
+                type: 'get_group_members',
+                data: { members }
+              };
+
+            case 'get_group_intents':
+              if (!req.groupId) {
+                throw new Error('Missing groupId for get_group_intents operation');
+              }
+              // Проверяем права доступа
+              const hasIntentsAccess = await groupService.checkMemberPermission(
+                req.groupId,
+                userAilockId,
+                ['owner', 'admin', 'member', 'guest']
+              );
+              
+              if (!hasIntentsAccess) {
+                throw new Error('Permission denied');
+              }
+              
+              const intents = await groupService.getGroupIntents(req.groupId);
+              return {
+                type: 'get_group_intents',
+                data: { intents }
+              };
+
+            case 'get_group_details':
+              if (!req.groupId) {
+                throw new Error('Missing groupId for get_group_details operation');
+              }
+              // Проверяем права доступа
+              const hasDetailsAccess = await groupService.checkMemberPermission(
+                req.groupId,
+                userAilockId,
+                ['owner', 'admin', 'member', 'guest']
+              );
+              
+              if (!hasDetailsAccess) {
+                throw new Error('Permission denied');
+              }
+              
+              const group = await groupService.getGroup(req.groupId);
+              const groupMembers = await groupService.getGroupMembers(req.groupId);
+              const groupIntents = await groupService.getGroupIntents(req.groupId);
+              const userMember = groupMembers.find(member => member.user_id === userAilockId);
+              
+              return {
+                type: 'get_group_details',
+                data: {
+                  group,
+                  meta: {
+                    membersCount: groupMembers.length,
+                    intentsCount: groupIntents.length,
+                    userRole: userMember?.role || 'guest'
+                  }
+                }
+              };
+
+            case 'search_users_for_invite':
+              if (!req.query) {
+                throw new Error('Missing query for search_users_for_invite operation');
+              }
+              
+              const userSearchResults = await groupService.searchUsers(req.query, req.limit || 10);
+              return {
+                type: 'search_users_for_invite',
+                data: { users: userSearchResults }
               };
 
             default:

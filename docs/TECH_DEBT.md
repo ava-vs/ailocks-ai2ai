@@ -6,7 +6,7 @@
 
 | ID | Описание | Приоритет | Оценка времени |
 |---|---|---|---|
-| TD-002 | **Header Integration (50 % ready)** — интегрировать inbox badge (`unreadCount`) и кнопку открытия inbox в `AilockHeaderWidget.tsx` и для мобильной версии - в нижнее меню вместо неиспользуемой кнопки. | High | 2 ч |
+| TD-002 | **Header Integration** — интегрировать inbox badge (`unreadCount`) и кнопку открытия inbox в `AilockHeaderWidget.tsx` и для мобильной версии - в нижнее меню вместо неиспользуемой кнопки. | Done | 2 ч |
 | TD-003 | **Auto-Clarify (30 % ready)** — подключить `autoClarifyIntent` в `netlify/functions/intents-create.ts`, отправка сообщения `clarify_intent`, если данные неполные. | Medium | 3 ч |
 | TD-004 | **Значок уведомления о новых сообщениях** — в верхнем углу закладки и карточек, имеющих новые сообщения, показывать значок "красная точка". | Medium | 3 ч |
 

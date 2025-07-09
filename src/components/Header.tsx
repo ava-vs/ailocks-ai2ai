@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, ChevronDown, Zap, MapPin, Globe, Bell, LogOut, User, Users, Settings, Plus, LayoutGrid, Search, BarChart, FileText, Bot, LogIn } from 'lucide-react';
+import { Menu, ChevronDown, Zap, MapPin, Globe, Bell, LogOut, User, Users, Settings, Plus, LayoutGrid, Search, BarChart, FileText, Bot, LogIn, MessageSquare, UserPlus } from 'lucide-react';
 import { toggleMobileMenu } from '@/lib/store';
 import { useUserSession } from '@/hooks/useUserSession';
 import { useLocation } from '@/hooks/useLocation';
@@ -7,6 +7,8 @@ import UserHeaderInfo from './Header/UserHeaderInfo';
 import AilockHeaderWidget from './Ailock/AilockHeaderWidget';
 import AuthModal from './Auth/AuthModal';
 import { useAuth } from '@/hooks/useAuth';
+import useNotifications from '@/hooks/useNotifications';
+import type { Notification } from '@/hooks/useNotifications';
 
 export default function Header() {
   const { currentUser, switchUser } = useUserSession();
@@ -15,6 +17,8 @@ export default function Header() {
   const [isAilockDropdownOpen, setIsAilockDropdownOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const { notifications, unreadCount, markAllAsRead } = useNotifications();
 
   const toggleMobileNav = () => {
     toggleMobileMenu();
@@ -120,17 +124,73 @@ export default function Header() {
         <div className="w-px h-6 bg-white/10 hidden md:block"></div>
         
         <div className="flex items-center gap-2">
-          {authUser ? (
-            <button onClick={logout} className="flex items-center gap-1 px-2 py-1 md:px-3 md:py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white text-xs md:text-sm transition-colors">
-              <LogOut className="w-3 h-3 md:w-4 md:h-4" />
-              <span className="hidden sm:inline">{authUser.name || authUser.email}</span>
-            </button>
-          ) : (
-            <button onClick={() => setAuthModalOpen(true)} className="flex items-center gap-1 px-2 py-1 md:px-3 md:py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white text-xs md:text-sm transition-colors">
-              <LogIn className="w-3 h-3 md:w-4 md:h-4" />
-              <span className="hidden sm:inline">Sign In</span>
-            </button>
+          {/* Индикатор уведомлений */}
+          {authUser && (
+            <div className="relative">
+              <button 
+                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                className="relative flex items-center justify-center w-8 h-8 rounded-full hover:bg-slate-700 transition-colors"
+              >
+                <Bell className="w-4 h-4 text-white" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-0 right-0 flex items-center justify-center w-4 h-4 text-[10px] bg-red-500 text-white rounded-full">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
+              
+              {/* Выпадающее меню уведомлений */}
+              {isNotificationsOpen && (
+                <div className="absolute right-0 mt-2 w-80 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-50 p-3">
+                  <h3 className="text-sm font-medium text-white border-b border-slate-700 pb-2 mb-2">Уведомления</h3>
+                  {notifications.length === 0 ? (
+                    <div className="py-4 text-center text-sm text-slate-400">Нет новых уведомлений</div>
+                  ) : (
+                    <div className="max-h-80 overflow-y-auto">
+                      {notifications.map((notification: Notification) => (
+                        <div key={notification.id} className={`p-2 mb-1 rounded text-sm ${notification.read ? 'bg-slate-700/50' : 'bg-slate-600'}`}>
+                          <div className="flex items-start">
+                            <div className="flex-shrink-0 mr-2 mt-1">
+                              {notification.type === 'message' && <MessageSquare className="w-4 h-4 text-blue-400" />}
+                              {notification.type === 'invite' && <UserPlus className="w-4 h-4 text-green-400" />}
+                              {notification.type === 'intent' && <Zap className="w-4 h-4 text-yellow-400" />}
+                            </div>
+                            <div>
+                              <p className="text-white">{notification.title}</p>
+                              <p className="text-xs text-slate-400">{notification.message}</p>
+                              <p className="text-xs text-slate-500 mt-1">{new Date(notification.createdAt).toLocaleTimeString()}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="mt-2 pt-2 border-t border-slate-700 flex justify-between">
+                    <button 
+                      className="text-xs text-blue-400 hover:text-blue-300" 
+                      onClick={() => markAllAsRead()}
+                    >Отметить все как прочитанные</button>
+                    <button className="text-xs text-slate-400 hover:text-slate-300">Все уведомления</button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
+          
+          {/* Кнопка авторизации / выхода */}
+          <div>
+            {authUser ? (
+              <button onClick={logout} className="flex items-center gap-1 px-2 py-1 md:px-3 md:py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white text-xs md:text-sm transition-colors">
+                <LogOut className="w-3 h-3 md:w-4 md:h-4" />
+                <span className="hidden sm:inline">{authUser.name || authUser.email}</span>
+              </button>
+            ) : (
+              <button onClick={() => setAuthModalOpen(true)} className="flex items-center gap-1 px-2 py-1 md:px-3 md:py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white text-xs md:text-sm transition-colors">
+                <LogIn className="w-3 h-3 md:w-4 md:h-4" />
+                <span className="hidden sm:inline">Sign In</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
