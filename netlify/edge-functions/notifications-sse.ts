@@ -2,8 +2,8 @@
 // Copyright © 2025
 // Comments in English as per project standards
 
-import { verifyToken, getAuthTokenFromHeaders } from "../../src/lib/auth/auth-utils";
-import { notificationService } from "../../src/lib/ailock/notification-service";
+import { verifyToken, getAuthTokenFromHeaders } from "../../src/lib/auth/auth-utils.ts";
+import { notificationService } from "../../src/lib/ailock/notification-service.ts";
 
 export default async (request: Request, context: any): Promise<Response> => {
   // Allow only GET
