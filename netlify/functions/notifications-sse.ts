@@ -59,6 +59,23 @@ function responseWithCORS(statusCode: number, body: any, eventHeaders?: any): Ha
 }
 
 export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResponse> => {
+  // Deprecated implementation – replaced by Edge Function in /netlify/edge-functions/notifications-sse.ts
+  return {
+    statusCode: 410,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+    },
+    body: JSON.stringify({
+      error: 'Gone',
+      message: 'Use Edge Function /notifications-sse instead.'
+    })
+  };
+}
+
+/* Old implementation kept below for reference but unreachable */
+/*
+
   // Обработка CORS preflight запроса
   if (event.httpMethod === 'OPTIONS') {
     return responseWithCORS(200, {}, event.headers);
@@ -159,3 +176,4 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
     return responseWithCORS(500, { error: 'Internal Server Error' }, event.headers);
   }
 };
+*/

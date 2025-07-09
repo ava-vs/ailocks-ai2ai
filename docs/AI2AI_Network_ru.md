@@ -215,6 +215,9 @@ graph TD
 ### 4.4. Инбокс, бейджи и система уведомлений
 
 - **Система уведомлений:** ✅ *Реализовано*
+  - С 2025-07 переведена на Netlify **Edge Function** `/.netlify/edge-functions/notifications-sse` (устраняет 10-секундный таймаут и частые переподключения)
+  - Serverless-версия `/.netlify/functions/notifications-sse` помечена как deprecated (возвращает 410 Gone)
+  - SSE-клиенту теперь не требуется заголовок `Authorization` — достаточно cookie `auth_token` (EventSource поддерживает `withCredentials`).
   - Централизованный NotificationService и useNotifications хук для работы с уведомлениями
   - Реализация на основе Server-Sent Events (SSE) для обновления в реальном времени
   - Поддержка аутентификации через заголовки (Bearer token) и cookies для совместимости с EventSource
