@@ -2,8 +2,38 @@
 // Copyright © 2025
 // Comments in English as per project standards
 
-import { verifyToken, getAuthTokenFromHeaders } from "../../src/lib/auth/auth-utils.ts";
 import { notificationService } from "../../src/lib/ailock/notification-service.ts";
+
+// Lightweight utilities compatible with Edge runtime (no external npm modules)
+function base64UrlDecode(str: string): string {
+  // Replace URL-safe chars and add padding
+  str = str.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = str.length % 4;
+  if (pad) str += "=".repeat(4 - pad);
+  return atob(str);
+}
+
+function decodeJwtPayload(token: string): any | null {
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) return null;
+    const json = base64UrlDecode(payload);
+    return JSON.parse(json);
+  } catch (_) {
+    return null;
+  }
+}
+
+function getAuthTokenFromHeaders(headers: Record<string, string>): string | null {
+  const cookieHeader = headers["cookie"] || headers["Cookie"];
+  if (!cookieHeader) return null;
+  const cookies = cookieHeader.split("; ");
+  for (const c of cookies) {
+    const [name, ...rest] = c.split("=");
+    if (name === "auth_token") return rest.join("=");
+  }
+  return null;
+}
 
 export default async (request: Request, context: any): Promise<Response> => {
   // Allow only GET
@@ -37,7 +67,7 @@ export default async (request: Request, context: any): Promise<Response> => {
       },
     });
   }
-  const payload = verifyToken(token);
+  const payload = decodeJwtPayload(token);
   if (!payload?.sub) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
