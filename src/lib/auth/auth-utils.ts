@@ -2,6 +2,9 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { serialize, parse } from 'cookie';
 
+// AICODE-NOTE: This module handles all authentication-related utilities including JWT management and cookie-based auth.
+// When modifying auth flow, ensure that all methods are updated consistently to maintain security integrity.
+
 // Environment variables
 const JWT_SECRET = process.env.JWT_SECRET || 'development-secret';
 const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10);
@@ -36,7 +39,10 @@ export function verifyToken(token: string): JwtPayload | null {
   }
 }
 
-// Cookie helpers
+// AICODE-NOTE: Cookie configuration for auth tokens
+// These settings are critical for security - httpOnly prevents JavaScript access to cookies,
+// secure ensures HTTPS-only in production, and sameSite prevents CSRF attacks
+// AICODE-TODO: Consider adding rotation mechanism for auth tokens to enhance security
 const cookieOptions = {
   httpOnly: true,
   sameSite: 'lax' as const,
@@ -52,9 +58,15 @@ export function clearAuthCookie(): string {
   return serialize('auth_token', '', { ...cookieOptions, maxAge: 0 });
 }
 
+// AICODE-ASK: Should we implement additional validation for the auth token structure before returning it?
+// Current implementation only checks for existence but not format validity
 export function getAuthTokenFromHeaders(headers: Record<string, string | string[] | undefined>): string | null {
   const cookieHeader = headers.cookie as string | undefined;
   if (!cookieHeader) return null;
   const cookies = parse(cookieHeader);
   return cookies['auth_token'] || null;
-} 
+  
+  // AICODE-NOTE: This function is used by Netlify Functions to extract the auth token from incoming requests.
+  // It's the primary method by which serverless functions authenticate users, so any changes here
+  // will affect the entire authentication system.
+}

@@ -1,3 +1,5 @@
+// AICODE-NOTE: Central API configuration point
+// All serverless function calls are routed through this base path
 const API_BASE = '/.netlify/functions';
 
 export const searchIntents = async (query: string) => {
@@ -34,10 +36,13 @@ export const searchIntents = async (query: string) => {
   }
 };
 
+// AICODE-NOTE: Intent creation requires authentication
+// All intent operations use localStorage-based auth token verification
 export const createIntent = async (intentData: any) => {
   try {
     const userId = localStorage.getItem('userId');
     if (!userId) {
+      // AICODE-TODO: Implement proper auth error handling with redirect to login
       throw new Error('User not authenticated');
     }
     

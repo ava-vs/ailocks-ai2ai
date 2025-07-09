@@ -194,6 +194,16 @@ The main endpoints available on the platform.
 - `PUT /.netlify/functions/ailock-interaction`: Mark a message as read.
 - `PATCH /.netlify/functions/ailock-interaction`: Reply to a message.
 
+### 4.5. Inbox, Badges, and Agent Integration
+Inbox Badge: The header and mobile navigation display a badge with the number of unread messages. The badge updates in real time via SSE (Server-Sent Events) and local caching.
+Global Inbox Service: A centralized service for managing incoming messages, with caching, subscription, and auto-refresh. Used in all key components (Header, MobileNavBar, InboxWidget).
+Request Optimization: All inbox operations (fetch, mark as read, bulk actions) are performed via the batch API, reducing server load and improving UI responsiveness.
+Integration Examples:
+AilockHeaderWidget: Shows the badge and opens the InboxWidget on click.
+MobileNavBar: The "Saved" button is replaced with an "Inbox" button with a badge.
+InboxWidget: Uses the global service to display and manage messages.
+Message Types: Supports clarify_intent, provide_info, collaboration_request, response with AI-based classification and routing.
+
 **🆕 Batch Operations (Optimized)**
 - `POST /.netlify/functions/ailock-batch`: Execute multiple operations in a single request.
   - Supported operations: `get_inbox`, `mark_read`, `multiple_mark_read`, `get_profile`, `get_daily_tasks`, `search_ailocks`, `reply_to_message`, `archive_message`, `send_message`, `get_interaction_stats`, `bulk_archive`
