@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { MessageSquare } from 'lucide-react';
 import { useUserSession } from '@/hooks/useUserSession';
 import { useAuth } from '@/hooks/useAuth';
 import { ailockApi } from '@/lib/ailock/api';
 import type { FullAilockProfile } from '@/lib/ailock/shared';
 import { getLevelInfo } from '@/lib/ailock/shared';
+import { AilockInboxService, type InboxState } from '@/lib/ailock/inbox-service';
 import AilockQuickStatus from './AilockQuickStatus';
 import AilockInboxWidget from './AilockInboxWidget';
 
@@ -14,7 +16,13 @@ export default function AilockHeaderWidget() {
   const [loading, setLoading] = useState(true);
   const [isQuickStatusOpen, setIsQuickStatusOpen] = useState(false);
   const [isInboxOpen, setIsInboxOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [inboxState, setInboxState] = useState<InboxState>({
+    interactions: [],
+    unreadCount: 0,
+    lastUpdate: new Date(0),
+    isLoading: false,
+    error: null
+  });
 
   // Use auth user if available, otherwise fallback to demo user
   const displayUser = authUser || currentUser;
@@ -23,8 +31,31 @@ export default function AilockHeaderWidget() {
   useEffect(() => {
     if (userId && userId !== 'loading') {
       loadProfile();
+      initializeInboxService();
     }
   }, [userId]);
+
+  // Initialize inbox service
+  const initializeInboxService = async () => {
+    if (!userId || userId === 'loading') return;
+    
+    try {
+      const inboxService = AilockInboxService.getInstance();
+      await inboxService.init(userId);
+      
+      // Subscribe to inbox updates
+      const unsubscribe = inboxService.subscribe((state: InboxState) => {
+        setInboxState(state);
+      });
+
+      // Cleanup on unmount
+      return () => {
+        unsubscribe();
+      };
+    } catch (error) {
+      console.error('Failed to initialize inbox service:', error);
+    }
+  };
 
   // Listen for profile updates from other components
   useEffect(() => {
@@ -34,24 +65,10 @@ export default function AilockHeaderWidget() {
       }
     };
 
-    const handleInboxUpdate = (event: CustomEvent) => {
-      if (event.detail.unreadCount !== undefined) {
-        setUnreadCount(event.detail.unreadCount);
-      }
-    };
-
-    const handleAilockNotification = () => {
-      setUnreadCount(prev => prev + 1);
-    };
-
     window.addEventListener('ailock-profile-updated', handleProfileUpdate);
-    window.addEventListener('ailock-inbox-updated', handleInboxUpdate as any);
-    window.addEventListener('ailock-notification', handleAilockNotification);
     
     return () => {
       window.removeEventListener('ailock-profile-updated', handleProfileUpdate);
-      window.removeEventListener('ailock-inbox-updated', handleInboxUpdate as any);
-      window.removeEventListener('ailock-notification', handleAilockNotification);
     };
   }, [userId]);
 
@@ -73,6 +90,38 @@ export default function AilockHeaderWidget() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleOpenInbox = () => {
+    setIsInboxOpen(true);
+  };
+
+  const handleRetryInbox = () => {
+    const inboxService = AilockInboxService.getInstance();
+    inboxService.backgroundRefresh();
+  };
+
+  // Get inbox button style and tooltip based on state
+  const getInboxButtonStyle = () => {
+    if (inboxState.error) {
+      return {
+        className: 'text-yellow-500 hover:text-yellow-600',
+        tooltip: `Failed to update inbox: ${inboxState.error}. Click to retry.`,
+        onClick: handleRetryInbox
+      };
+    }
+    if (inboxState.isLoading) {
+      return {
+        className: 'text-blue-400 animate-pulse',
+        tooltip: 'Updating inbox...',
+        onClick: handleOpenInbox
+      };
+    }
+    return {
+      className: 'text-white/70 hover:text-white',
+      tooltip: inboxState.unreadCount > 0 ? `Inbox (${inboxState.unreadCount} unread)` : 'Inbox',
+      onClick: handleOpenInbox
+    };
   };
 
   if (loading || !profile) {
@@ -97,9 +146,12 @@ export default function AilockHeaderWidget() {
     window.location.href = '/my-ailock';
   };
 
+  const inboxButtonStyle = getInboxButtonStyle();
+
   return (
       <>
-        <div className="relative">
+        <div className="relative flex items-center space-x-2">
+          {/* Main Ailock Button */}
           <button 
             onClick={() => setIsQuickStatusOpen(true)}
             className="hidden md:flex items-center space-x-3 hover:bg-white/10 rounded-lg p-2 transition-colors cursor-pointer border border-white/20 ailock-widget"
@@ -108,7 +160,6 @@ export default function AilockHeaderWidget() {
             <div className="relative">
               <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${getAvatarGradient()} p-0.5`}>
                 <div className="w-full h-full rounded-lg bg-slate-800/90 flex items-center justify-center">
-                  
                   <img 
                     src="/images/ailock-avatar.png" 
                     alt="Ailock Avatar" 
@@ -140,17 +191,60 @@ export default function AilockHeaderWidget() {
               </div>
             </div>
             
-            
             <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
             </svg>
           </button>
 
+          {/* Enhanced Inbox Button with Error Handling */}
+          <div className="relative hidden md:block">
+            <button
+              onClick={inboxButtonStyle.onClick}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors border border-white/20 flex items-center justify-center group"
+              title={inboxButtonStyle.tooltip}
+            >
+              <MessageSquare className={`w-5 h-5 transition-colors ${inboxButtonStyle.className}`} />
+              
+              {/* Unread badge */}
+              {inboxState.unreadCount > 0 && !inboxState.error && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center min-w-[20px] px-1">
+                  {inboxState.unreadCount > 99 ? '99+' : inboxState.unreadCount}
+                </span>
+              )}
+              
+              {/* Error indicator */}
+              {inboxState.error && (
+                <span className="absolute -top-1 -right-1 bg-yellow-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  !
+                </span>
+              )}
+              
+              {/* Loading indicator */}
+              {inboxState.isLoading && !inboxState.error && (
+                <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+              )}
+              
+              {/* Enhanced tooltip on hover */}
+              {inboxState.error && (
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 whitespace-nowrap">
+                  {inboxButtonStyle.tooltip}
+                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45"></div>
+                </div>
+              )}
+            </button>
+          </div>
+
+          {/* Modals */}
           <AilockQuickStatus
             isOpen={isQuickStatusOpen}
             onClose={() => setIsQuickStatusOpen(false)}
             profile={profile}
             onOpenFullProfile={handleOpenFullProfile}
+          />
+
+          <AilockInboxWidget
+            isOpen={isInboxOpen}
+            onClose={() => setIsInboxOpen(false)}
           />
         </div>
       </>

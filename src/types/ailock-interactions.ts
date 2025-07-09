@@ -15,6 +15,9 @@ export interface AilockInteraction {
   createdAt: Date;
   readAt?: Date;
   respondedAt?: Date;
+  fromAilockName?: string;
+  fromAilockLevel?: number;
+  intentTitle?: string;
 }
 
 export interface MessageClassification {

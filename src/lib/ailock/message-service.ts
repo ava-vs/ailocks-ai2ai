@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { ailockInteractions, ailocks, users } from '../schema';
+import { ailockInteractions, ailocks, users, intents } from '../schema';
 import { eq, desc, and, isNull, or, sql } from 'drizzle-orm';
 import type { 
   AilockInteraction, 
@@ -72,7 +72,7 @@ export class AilockMessageService {
   }
 
   /**
-   * Получение входящих сообщений для Айлока
+   * Получение входящих сообщений для Айлока с расширенной информацией
    */
   async getInbox(
     ailockId: string,
@@ -87,15 +87,41 @@ export class AilockMessageService {
       whereConditions.push(eq(ailockInteractions.status, status));
     }
     
+    // Расширенный запрос с JOIN для получения имен Ailock и интентов
     const interactions = await db
-      .select()
+      .select({
+        // Основные поля взаимодействия
+        id: ailockInteractions.id,
+        fromAilockId: ailockInteractions.fromAilockId,
+        toAilockId: ailockInteractions.toAilockId,
+        interactionType: ailockInteractions.interactionType,
+        messageContent: ailockInteractions.messageContent,
+        status: ailockInteractions.status,
+        createdAt: ailockInteractions.createdAt,
+        readAt: ailockInteractions.readAt,
+        respondedAt: ailockInteractions.respondedAt,
+        sessionId: ailockInteractions.sessionId,
+        intentId: ailockInteractions.intentId,
+        chainId: ailockInteractions.chainId,
+        priority: ailockInteractions.priority,
+        parentInteractionId: ailockInteractions.parentInteractionId,
+        classification: ailockInteractions.classification,
+        moderation: ailockInteractions.moderation,
+        // Расширенная информация
+        fromAilockName: ailocks.name,
+        fromAilockLevel: ailocks.level,
+        intentTitle: sql<string | null>`
+          (SELECT title FROM intents WHERE id = ${ailockInteractions.intentId})
+        `,
+      })
       .from(ailockInteractions)
+      .leftJoin(ailocks, eq(ailockInteractions.fromAilockId, ailocks.id))
       .where(and(...whereConditions))
       .orderBy(desc(ailockInteractions.createdAt))
       .limit(limit)
       .offset(offset);
     
-    return interactions.map(this.mapDbToInterface);
+    return interactions.map(this.mapDbToInterfaceExtended);
   }
 
   /**
@@ -389,6 +415,31 @@ export class AilockMessageService {
       createdAt: dbInteraction.createdAt,
       readAt: dbInteraction.readAt,
       respondedAt: dbInteraction.respondedAt
+    };
+  }
+
+  private mapDbToInterfaceExtended(dbInteraction: any): AilockInteraction {
+    return {
+      id: dbInteraction.id,
+      fromAilockId: dbInteraction.fromAilockId,
+      toAilockId: dbInteraction.toAilockId,
+      sessionId: dbInteraction.sessionId,
+      intentId: dbInteraction.intentId,
+      type: dbInteraction.interactionType,
+      content: dbInteraction.messageContent,
+      classification: dbInteraction.classification,
+      moderation: dbInteraction.moderation,
+      parentId: dbInteraction.parentInteractionId,
+      chainId: dbInteraction.chainId,
+      priority: dbInteraction.priority,
+      status: dbInteraction.status,
+      createdAt: dbInteraction.createdAt,
+      readAt: dbInteraction.readAt,
+      respondedAt: dbInteraction.respondedAt,
+      // Расширенные поля
+      fromAilockName: dbInteraction.fromAilockName,
+      fromAilockLevel: dbInteraction.fromAilockLevel,
+      intentTitle: dbInteraction.intentTitle
     };
   }
 

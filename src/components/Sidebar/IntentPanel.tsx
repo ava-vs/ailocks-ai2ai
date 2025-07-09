@@ -81,8 +81,8 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
     try {
       const response = await fetch('/.netlify/functions/in-work-intents', {
         method: 'POST',
+        credentials: 'include',
         headers: { 
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ intentId: intent.id }),
@@ -370,7 +370,8 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
     setLoadingInWork(true);
     try {
       const response = await fetch('/.netlify/functions/in-work-intents', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
       });
       if (!response.ok) throw new Error('Failed to fetch');
       const data = await response.json();
@@ -392,8 +393,8 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
     try {
       const response = await fetch('/.netlify/functions/in-work-intents', {
         method: 'DELETE',
+        credentials: 'include',
         headers: { 
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
           'Content-Type': 'application/json',
          },
         body: JSON.stringify({ intentId }),

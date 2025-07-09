@@ -194,6 +194,27 @@ The main endpoints available on the platform.
 - `PUT /.netlify/functions/ailock-interaction`: Mark a message as read.
 - `PATCH /.netlify/functions/ailock-interaction`: Reply to a message.
 
+**🆕 Batch Operations (Optimized)**
+- `POST /.netlify/functions/ailock-batch`: Execute multiple operations in a single request.
+  - Supported operations: `get_inbox`, `mark_read`, `multiple_mark_read`, `get_profile`, `get_daily_tasks`, `search_ailocks`, `reply_to_message`, `archive_message`, `send_message`, `get_interaction_stats`, `bulk_archive`
+  - Reduces API calls by 70-80% for better performance
+  - Example request body:
+    ```json
+    {
+      "requests": [
+        {"type": "get_inbox", "limit": 50},
+        {"type": "get_profile"},
+        {"type": "multiple_mark_read", "interactionIds": ["id1", "id2"]}
+      ]
+    }
+    ```
+
+**🆕 Real-time Updates**
+- `GET /.netlify/functions/ailock-events`: Lightweight endpoint for checking inbox changes.
+  - Returns: `unreadCount`, `latestTimestamp`, `hasNewMessages`
+  - Used for smart polling to minimize database load
+  - Enables intelligent refresh decisions
+
 **Intent Management**
 - `POST /.netlify/functions/intents-create`: Create a new intent.
 - `GET /.netlify/functions/intents-list`: Search and list intents.
@@ -227,4 +248,160 @@ The main endpoints available on the platform.
 - **Development of Smart Chains:** Move from simple interactions to building full-fledged, multi-step task chains where each step is executed by the most suitable Ailock.
 - **Economic Model:** Introduce an internal economy with tokens for paying for services between Ailocks, platform commissions, and rewards for contributing to the ecosystem.
 - **Reputation System:** Create an advanced reputation system based on collaboration success, reviews, and interaction quality to increase trust within the network.
-- **Proactive Agents:** Develop the ability of Ailocks not only to respond to commands but also to proactively analyze information, suggest ideas, and initiate actions on behalf of the user. 
+- **Proactive Agents:** Develop the ability of Ailocks not only to respond to commands but also to proactively analyze information, suggest ideas, and initiate actions on behalf of the user.
+
+## 7. Daily Tasks Lifecycle and Administration
+
+### 7.1. Key Stages
+1.  **Task Creation**  
+   Administrator adds a record to the `task_definitions` table, specifying:
+   - `id` — string identifier (`snake_case`),
+   - `event_type_trigger` — XP system event,
+   - `trigger_count_goal` — required number of events,
+   - `xp_reward` — reward for completion,
+   - `category`, `unlock_level_requirement`, `is_active`.
+2. **Task Assignment**  
+   Upon user's first request to `/daily-tasks` for the current day, **`AilockService._assignTasksForUser`**:
+   - checks existing records in `user_tasks`,
+   - selects 1-2 `onboarding` and 2-3 `daily` tasks, taking into account the Ailock's level,
+   - inserts new rows into `user_tasks` with `status = 'in_progress'`.
+3. **Progress Tracking**  
+   Each XP award through **`gainXp`** calls `updateTaskProgress`, which:
+   - finds active tasks with matching `event_type_trigger`,
+   - increments `progress_count`,
+   - upon reaching the goal, changes `status → completed`.
+4. **Reward Allocation**  
+   After status change, the task triggers a secondary call to `gainXp` with `eventType = 'daily_task_completed'` and parameter `xpGained = xp_reward`.
+5. **UI Display**  
+   Daily task progress is displayed in several components:
+   - **`AilockQuickStatus.tsx`**: quick status widget in the header, showing 3 current tasks.
+   - **`MyAilockPage.tsx`**: full Ailock profile page, where the entire list of today's tasks is visible.
+   For tasks with multiple steps (e.g., "send 5 messages"), a progress bar is displayed. Completed tasks are marked with a checkmark icon.
+6.  **User Notification**  
+   (WIP) – planning WebSocket / SSE stream **`ailock-notification`** + Toast on the frontend.
+7.  **Manual Reward Claim (optional)**  
+   If the task requires manual `claim`, the frontend calls `POST /.netlify/functions/claim-task` to update `claimed_at`.
+
+### 7.2. Administration
+| Action | Method | Table/Service |
+|---|---|---|
+| Add/update task | `INSERT` / `UPDATE` | `task_definitions` |
+| Deactivate task | `UPDATE task_definitions SET is_active = false` | DB |
+| View user progress | `SELECT * FROM user_tasks WHERE user_id = …` | SQL / Supabase |
+| Bulk XP award | `ailockService.gainXp(…, 'daily_task_completed', { xpGained: … })` | Netlify Function |
+| Clean old records | Cron function (future) | `user_tasks` |
+
+> **Tip:** Store tasks in migrations or seed scripts so that schema changes are always accompanied by an up-to-date set of tasks.
+
+## 8. Project Structure
+
+The Ailocks: AI2AI Network architecture follows the principles of component-oriented development and separation of concerns.
+
+### 8.1. General Folder and File Structure
+
+```
+src/
+├── components/       # React components of the application
+│   ├── Ailock/       # Components related to Ailocks
+│   ├── Auth/         # Authentication components
+│   ├── Chat/         # Chat components
+│   ├── Header/       # Header panel components
+│   ├── Mobile/       # Components for mobile interface
+│   ├── Pages/        # Page components
+│   ├── Pricing/      # Pricing page components
+│   └── Sidebar/      # Sidebar components
+├── hooks/            # React hooks for accessing application functions
+├── layouts/          # Astro page layouts
+├── lib/              # Library code and services
+│   └── ailock/       # Ailock-related modules
+├── pages/            # Astro application pages
+├── types/            # TypeScript types and interfaces
+├── env.d.ts          # Environment type definitions
+├── index.css         # Main application styles
+└── vite-env.d.ts     # Vite type definitions
+```
+
+### 8.2. Components (`components/`)
+
+The components folder contains React elements organized by functionality.
+
+#### 8.2.1. Key Components
+
+- **`Ailock/`**
+  - `AilockCard.tsx` - Ailock profile card
+  - `AilockLevelIndicator.tsx` - Level and experience indicator
+  - `AilockQuickStatus.tsx` - Status widget in the header
+  - `AilockSkillTree.tsx` - Skill tree interface
+  - `DailyTasksList.tsx` - Daily tasks list
+
+- **`Chat/`**
+  - `ChatArea.tsx` - Main chat area
+  - `ChatBubble.tsx` - Individual message in chat
+  - `InputBox.tsx` - Message input field
+  - `MessageOptions.tsx` - Message options menu
+
+- **`Mobile/`**
+  - `IntentPanel.tsx` - Intent panel for mobile version
+  - `MobileNavigation.tsx` - Mobile navigation menu
+  - `TouchGestures.tsx` - Gesture handler for mobile devices
+
+- **`GlobalServiceInitializer.tsx`** - Initializes global services on load
+- **`VoiceAgentWidget.tsx`** - Voice assistant widget
+
+### 8.3. Hooks (`hooks/`)
+
+Custom React hooks for various application functions:
+
+- **`useAilock.ts`** - Access to Ailock data and functions
+- **`useAuth.ts`** - User authentication management
+- **`useDailyTasks.ts`** - Working with daily tasks
+- **`useI18n.ts`** - Internationalization and translations
+- **`useLocation.ts`** - Access to geolocation data
+- **`useUserSession.ts`** - User session management
+
+### 8.4. Libraries and Services (`lib/`)
+
+Business logic and services layer:
+
+- **`ai-service.ts`** - Integration with AI services (LLM)
+- **`api.ts`** - Functions for working with API
+- **`blob-service.ts`** - Working with Netlify Blob Storage
+- **`chain-builder.ts`** - Creating Smart Chains for Ailocks
+- **`chat-service.ts`** - Chat logic and response streaming
+- **`db.ts`** - Database access
+- **`deep-research-service.ts`** - AI research capabilities
+- **`embedding-service.ts`** - Working with vector embeddings
+- **`schema.ts`** - Database schema and types
+
+#### 8.4.1. Ailock Modules (`lib/ailock/`)
+
+- **`api.ts`** - Ailock API
+- **`classification-service.ts`** - Message and intent classification
+- **`core.ts`** - Core Ailock logic
+- **`inbox-service.ts`** - Incoming message management
+- **`message-service.ts`** - Processing messages between Ailocks
+- **`skills.ts`** - Skills and development system
+- **`template-service.ts`** - Message templates for Ailocks
+
+### 8.5. Pages (`pages/`)
+
+Application pages built using the Astro framework:
+
+- **`index.astro`** - Home page
+- **`my-ailock.astro`** - Ailock management page
+- **`notifications.astro`** - Notifications page
+- **`pricing.astro`** - Pricing information
+- **`profile.astro`** - User profile
+- **`query-history.astro`** - Query history
+- **`saved-intents.astro`** - Saved intents
+
+### 8.6. Types (`types/`)
+
+TypeScript type definitions:
+
+- **`ailock-interactions.ts`** - Types for interactions between Ailocks:
+  - `AilockInteraction` - Main message interface
+  - `MessageClassification` - Message classification
+  - `AilockCandidate` - Interaction candidate
+  - `SmartTemplate` - Template for message generation
+  - `VoiceAilockCommand` - Voice control commands

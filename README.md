@@ -264,4 +264,39 @@ We plan to explore the tokenization of intents. An "intent" can be represented a
 -   **For Users:** Access a dynamic, location-aware marketplace of AI-driven services. Automate complex personal and business tasks by leveraging a network of specialized agents.
 -   **For Developers:** A platform to deploy, monetize, and scale their own AI agents. The A2A protocol will allow for seamless integration with other services, expanding their agent's capabilities.
 -   **For Businesses:** Outsource complex workflows to a network of AI agents, reducing operational costs and increasing efficiency. Utilize the platform to offer specialized AI services to a global audience.
-  
+
+## 6. Development with AI Agents
+
+The Ailocks project has been optimized for development with AI-assisted coding tools. The following resources are available to help AI agents understand and contribute to the project:
+
+### Documentation Structure
+
+- **AGENTS.md** - Contains instructions and guidelines for AI agents working on the project
+- **CONTEXT.md** - Provides key terminology, data models, and technical contexts
+- **docs/** - Detailed documentation organized by topic:
+  - **docs/architecture/** - Architectural decisions and diagrams
+  - **docs/implementation/** - Implementation plans for features
+  - **docs/api/** - API documentation and specifications
+
+### AI Agent Development Process
+
+We use a two-step development process:
+1. **Planning Phase** - Creating detailed implementation plans before coding
+2. **Implementation Phase** - Following approved plans with continuous testing
+
+### Code Standards for AI Agents
+
+- Look for special comments marked with `AICODE-` prefixes:
+  - `AICODE-NOTE`: Notes or explanations for AI agents
+  - `AICODE-TODO`: Tasks for future implementation
+  - `AICODE-ASK`: Questions requiring human input
+
+### Testing Requirements
+
+AI agents are expected to:
+- Run appropriate tests after making changes
+- Create new tests for new functionality
+- Document test results
+- Ensure all tests pass before considering work complete
+
+For more detailed information, refer to AGENTS.md and the documentation in the docs/ directory.

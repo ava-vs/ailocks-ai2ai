@@ -171,9 +171,9 @@ export default function VoiceAgentWidget() {
           // Отправляем сообщение
           const response = await fetch('/.netlify/functions/ailock-interaction', {
             method: 'POST',
+            credentials: 'include',
             headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+              'Content-Type': 'application/json'
             },
             body: JSON.stringify({
               toAilockId: targetAilock.id,
@@ -214,8 +214,9 @@ export default function VoiceAgentWidget() {
 
         try {
           const response = await fetch(`/.netlify/functions/ailock-interaction?limit=${limit}&status=sent`, {
+            credentials: 'include',
             headers: { 
-              'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+              'Content-Type': 'application/json'
             }
           });
 

@@ -4,6 +4,7 @@ import CollapsibleNavigationSidebar from '@/components/Sidebar/NavigationSidebar
 import CollapsibleIntentPanel from '@/components/Sidebar/CollapsibleIntentPanel';
 import StatusBar from '@/components/StatusBar.tsx';
 import GlobalToaster from '@/components/GlobalToaster.tsx';
+import GlobalServiceInitializer from '@/components/GlobalServiceInitializer.tsx';
 import BoltBadge from '@/components/BoltBadge.tsx';
 import MobileNavBar from '@/components/Mobile/MobileNavBar.tsx';
 import '@/index.css';
@@ -45,6 +46,9 @@ const { title, description = "Advanced AI collaboration platform with geo-intell
     <slot name="head" />
   </head>
   <body class="bg-[#0B1426] text-foreground overflow-hidden h-screen">
+    <!-- Global Service Initializer - loads background services -->
+    <GlobalServiceInitializer client:load />
+
     <Header client:load />
 
     <div class="block md:block">
