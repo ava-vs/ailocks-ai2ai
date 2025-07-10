@@ -221,3 +221,32 @@ export const replyAilockMessage = async ({
     throw error;
   }
 }; 
+
+export const getIntentInteractions = async (intentId: string) => {
+  if (!intentId) {
+    throw new Error('Intent ID is required to fetch interactions.');
+  }
+
+  const response = await fetch('/.netlify/functions/ailock-batch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      requests: [{ type: 'get_intent_interactions', intentId: intentId }]
+    })
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    console.error('Failed to fetch intent interactions:', errorBody);
+    throw new Error(`Failed to fetch interactions: ${response.statusText}`);
+  }
+
+  const result = await response.json();
+
+  const interactionResult = result.batch_results[0];
+  if (interactionResult.status === 'error') {
+    throw new Error(interactionResult.message);
+  }
+
+  return interactionResult.body;
+}; 

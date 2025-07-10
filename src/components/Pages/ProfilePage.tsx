@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, User, MapPin, Globe, Clock, Edit3, Save, X, Camera, Shield, Bell, Palette, Languages, Trash2, Plus } from 'lucide-react';
 import { useUserSession } from '../../hooks/useUserSession';
 import { useLocation } from '../../hooks/useLocation';

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Clock, MessageCircle, Target, User, Calendar, Filter, Search, ExternalLink, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Clock, MessageCircle, Target, User, Calendar, Search, ExternalLink, RotateCcw } from 'lucide-react';
 import { useUserSession } from '@/hooks/useUserSession';
 
 interface RecentActivity {

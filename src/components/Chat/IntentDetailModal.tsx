@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X, MapPin, Tag, Briefcase, Calendar, DollarSign, Target, CheckCircle, ArrowRight, Loader2, Send, MessageCircle } from 'lucide-react';
-import { sendAilockMessage, replyAilockMessage, getAilockProfileByUser, fetchInboxInteractions } from '../../lib/api';
+import { sendAilockMessage, replyAilockMessage, getAilockProfileByUser, getIntentInteractions } from '../../lib/api';
+import { useUserSession } from '@/hooks/useUserSession';
 import AilockQuickStatus from '../Ailock/AilockQuickStatus';
 import { createPortal } from 'react-dom';
+import type { AilockInteraction } from '@/types/ailock-interactions';
 
 // We'll need to move this interface to a shared types file later
 interface IntentCard {
@@ -29,55 +31,96 @@ interface IntentDetailModalProps {
   alreadyInWork?: boolean;
 }
 
+const Avatar = ({ name, onClick }: { name: string, onClick?: () => void }) => (
+  <div
+    className={`w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-white uppercase flex-shrink-0 ${onClick ? 'cursor-pointer' : ''}`}
+    onClick={onClick}
+  >
+    {name?.charAt(0) || 'A'}
+  </div>
+);
+
 export default function IntentDetailModal({ isOpen, onClose, onStartWork, intent, alreadyInWork = false }: IntentDetailModalProps) {
   if (!isOpen || !intent) return null;
 
+  const { currentUser } = useUserSession();
+  const [currentUserAilockId, setCurrentUserAilockId] = useState<string | null>(null);
   const [authorAilockId, setAuthorAilockId] = useState<string | null>(null);
-  const [thread, setThread] = useState<any[]>([]);
+
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
-  const [replyTo, setReplyTo] = useState<any | null>(null);
+  const [replyTo, setReplyTo] = useState<AilockInteraction | null>(null);
   const [authorProfile, setAuthorProfile] = useState<any | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [interactions, setInteractions] = useState<AilockInteraction[]>([]);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Load author Ailock ID & thread on mount/open
   useEffect(() => {
-    const load = async () => {
+    const loadData = async () => {
+      if (!intent?.id || !currentUser?.id) return;
+
+      setIsLoadingMessages(true);
+      setError(null);
+
       try {
-        if (intent.userId) {
-          const profile = await getAilockProfileByUser(intent.userId);
-          setAuthorAilockId(profile.id);
-          setAuthorProfile(profile);
+        // Fetch profiles and messages in parallel
+        const [authorProf, currentUserProf, fetchedInteractions] = await Promise.all([
+          intent.userId ? getAilockProfileByUser(intent.userId) : Promise.resolve(null),
+          getAilockProfileByUser(currentUser.id),
+          getIntentInteractions(intent.id)
+        ]);
+
+        if (authorProf) {
+          setAuthorProfile(authorProf);
+          setAuthorAilockId(authorProf.id);
         }
-        const inbox = await fetchInboxInteractions(100);
-        const intentThread = inbox.filter((i: any) => i.intentId === intent.id);
-        setThread(intentThread);
-      } catch (err) {
-        console.warn('Failed to load intent thread:', err);
+
+        if (currentUserProf) {
+          setCurrentUserAilockId(currentUserProf.id);
+        }
+
+        setInteractions(fetchedInteractions.sort((a: AilockInteraction, b: AilockInteraction) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()));
+
+      } catch (err: any) {
+        setError(err.message || 'Failed to load discussion.');
+        console.error(err);
+      } finally {
+        setIsLoadingMessages(false);
       }
     };
-    load();
-  }, [intent]);
+
+    if (isOpen) {
+      loadData();
+    }
+  }, [isOpen, intent, currentUser]);
 
   const handleSend = async () => {
-    if (!authorAilockId || !message.trim()) return;
+    const targetAilockId = replyTo ? (replyTo.fromAilockId === currentUserAilockId ? replyTo.toAilockId : replyTo.fromAilockId) : authorAilockId;
+
+    if (!targetAilockId || !message.trim()) return;
+
     setSending(true);
     try {
+      let newInteraction: AilockInteraction | null = null;
       if (replyTo) {
         const res = await replyAilockMessage({
           originalInteractionId: replyTo.id,
           responseContent: message.trim()
         });
-        setThread(prev => [res.response, ...prev]);
+        newInteraction = res.response;
         setReplyTo(null);
       } else {
         const res = await sendAilockMessage({
-          toAilockId: authorAilockId,
+          toAilockId: targetAilockId,
           message: message.trim(),
           intentId: intent.id,
           type: 'collaboration_request'
         });
-        setThread(prev => [res.interaction, ...prev]);
+        newInteraction = res.interaction;
+      }
+      if (newInteraction) {
+        setInteractions(prev => [...prev, newInteraction!]);
       }
       setMessage('');
     } catch (err) {
@@ -174,44 +217,43 @@ export default function IntentDetailModal({ isOpen, onClose, onStartWork, intent
           {/* Messaging section */}
           <div>
             <h4 className="text-lg font-semibold text-white mb-3 flex items-center gap-2"><MessageCircle className="w-5 h-5"/>Discussion</h4>
-            <div className="max-h-56 overflow-y-auto space-y-3 mb-3 border border-slate-700/50 rounded-lg p-3 bg-slate-700/30">
-              {thread.length === 0 && (
-                <p className="text-gray-400 text-sm">No messages yet.</p>
+            <div className="max-h-56 overflow-y-auto space-y-4 mb-3 border border-slate-700/50 rounded-lg p-3 bg-slate-700/30">
+              {isLoadingMessages && <div className="flex justify-center p-4"><Loader2 className="w-6 h-6 animate-spin text-blue-400" /></div>}
+              {error && <p className="text-red-400 text-center text-sm">{error}</p>}
+              {!isLoadingMessages && !error && interactions.length === 0 && (
+                <p className="text-gray-400 text-center text-sm">No messages yet. Start the conversation!</p>
               )}
-              {thread.map((item) => {
-                const isAuthor = item.fromAilockId === authorAilockId;
+              {!isLoadingMessages && !error && interactions.map((item) => {
+                const isCurrentUser = item.fromAilockId === currentUserAilockId;
                 const isSelected = replyTo?.id === item.id;
-                const parent = item.parentId ? thread.find(t => t.id === item.parentId) : null;
 
-                const Avatar = () => (
-                  <div
-                    className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 cursor-pointer"
-                    onClick={() => isAuthor && setShowProfileModal(true)}
-                  >
-                    <img src="/images/ailock-avatar.png" alt="avatar" className="w-full h-full object-cover" />
-                  </div>
-                );
-
-                const Bubble = () => (
-                  <div
-                    onClick={() => setReplyTo(isSelected ? null : item)}
-                    className={`max-w-[80%] p-2 rounded-md text-sm cursor-pointer transition-colors ${isAuthor ? 'bg-slate-600/60' : 'bg-blue-600/40'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}
-                  >
-                    {parent && (
-                      <div className="text-xs italic text-gray-300 mb-1 border-l-2 border-gray-500 pl-2 line-clamp-2">
-                        {parent.content.slice(0, 100)}
+                const getBubbleContent = () => (
+                    <div
+                      onClick={() => setReplyTo(isSelected ? null : item)}
+                      className={`flex flex-col w-full max-w-xs leading-1.5 p-3 rounded-xl cursor-pointer transition-colors ${
+                        isCurrentUser
+                          ? 'bg-blue-600 rounded-br-none'
+                          : 'bg-slate-600 rounded-bl-none'
+                      } ${isSelected ? 'ring-2 ring-blue-400' : ''}`}
+                    >
+                      <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                        <span className="text-sm font-semibold text-white">{isCurrentUser ? "You" : (item.fromAilockName || 'Ailock')}</span>
+                        <span className="text-xs font-normal text-gray-300">{new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
-                    )}
-                    <p className="whitespace-pre-wrap text-gray-100">{item.content}</p>
-                    <span className="text-gray-400 text-[10px]">{new Date(item.createdAt).toLocaleString()}</span>
-                  </div>
+                      {item.parentInteractionId && (
+                        <div className="text-xs italic text-gray-300 my-1 border-l-2 border-gray-500 pl-2 line-clamp-2 bg-black/20 p-1 rounded">
+                          Replying to: {interactions.find(i => i.id === item.parentInteractionId)?.content.slice(0,50) || '...'}
+                        </div>
+                      )}
+                      <p className="text-sm font-normal py-2 text-white">{item.content}</p>
+                    </div>
                 );
 
                 return (
-                  <div key={item.id} className={`flex ${isAuthor ? 'justify-start' : 'justify-end'} items-start gap-2`}>
-                    {isAuthor && <Avatar />}
-                    <Bubble />
-                    {!isAuthor && <Avatar />}
+                  <div key={item.id} className={`flex items-end gap-2.5 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
+                    {!isCurrentUser && <Avatar name={item.fromAilockName || 'A'} onClick={() => { setAuthorProfile({ name: item.fromAilockName }); setShowProfileModal(true) }}/>}
+                    {getBubbleContent()}
+                    {isCurrentUser && <Avatar name={'You'} />}
                   </div>
                 );
               })}
@@ -219,7 +261,7 @@ export default function IntentDetailModal({ isOpen, onClose, onStartWork, intent
             {replyTo && (
               <div className="mb-2 text-xs text-blue-300 flex items-center gap-2">
                 <ArrowRight className="w-3 h-3" /> Replying to: <span className="italic truncate max-w-[12rem]">{replyTo.content}</span>
-                <button className="text-red-400" onClick={() => setReplyTo(null)} title="Cancel reply"><X /></button>
+                <button className="text-red-400 hover:text-red-300" onClick={() => setReplyTo(null)} title="Cancel reply"><X className="w-3 h-3"/></button>
               </div>
             )}
             <div className="flex gap-2">
@@ -227,12 +269,12 @@ export default function IntentDetailModal({ isOpen, onClose, onStartWork, intent
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={2}
-                placeholder="Write a message…"
+                placeholder={replyTo ? `Replying to ${replyTo.fromAilockName}...` : "Write a message…"}
                 className="flex-1 rounded-lg bg-slate-700/60 text-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <button
                 onClick={handleSend}
-                disabled={!message.trim() || sending || !authorAilockId}
+                disabled={!message.trim() || sending || (!authorAilockId && !replyTo)}
                 className="p-3 rounded-lg bg-blue-500 hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center"
               >
                 {sending ? <Loader2 className="w-5 h-5 animate-spin"/> : <Send className="w-5 h-5"/>}
@@ -264,7 +306,9 @@ export default function IntentDetailModal({ isOpen, onClose, onStartWork, intent
         isOpen={showProfileModal}
         onClose={() => setShowProfileModal(false)}
         profile={authorProfile}
-        onOpenFullProfile={() => {}}
+        onOpenFullProfile={() => {
+            if(authorProfile?.userId) window.open(`/profile/${authorProfile.userId}`);
+        }}
       />
     </div>
   );

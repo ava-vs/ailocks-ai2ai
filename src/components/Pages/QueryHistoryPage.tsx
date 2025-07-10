@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Search, Calendar, MessageCircle, Clock, Trash2, RotateCcw, Filter, Download, Archive } from 'lucide-react';
+import { ArrowLeft, Search, Calendar, MessageCircle, Clock, Trash2, RotateCcw, Download} from 'lucide-react';
 import { useUserSession } from '@/hooks/useUserSession';
 import { useLocation } from '@/hooks/useLocation';
 

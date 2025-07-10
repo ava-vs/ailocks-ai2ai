@@ -8,7 +8,7 @@ export interface AilockInteraction {
   content: string;
   classification?: MessageClassification;
   moderation?: ModerationResult;
-  parentId?: string; // Для цепочек сообщений
+  parentInteractionId?: string; // Для цепочек сообщений
   chainId?: string;  // Для Smart Chains
   priority?: number; // 1-100
   status: 'sent' | 'delivered' | 'read' | 'responded' | 'archived';

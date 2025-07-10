@@ -3,8 +3,50 @@ import { verifyToken, getAuthTokenFromHeaders } from '../../src/lib/auth/auth-ut
 import { AilockService } from '../../src/lib/ailock/core';
 import { AilockMessageService } from '../../src/lib/ailock/message-service';
 import { GroupService } from '../../src/lib/ailock/group-service';
+import { eq, desc, and, inArray, or, isNotNull, isNull, asc } from 'drizzle-orm';
+import { db, withDbRetry } from '@/lib/db';
+import * as schema from '@/lib/schema';
 
-function responseWithCORS(statusCode: number, body: any): HandlerResponse {
+// Define more specific types for batch requests
+interface GetInboxRequest { type: 'get_inbox'; status?: 'sent' | 'read'; limit?: number; offset?: number; }
+interface MarkReadRequest { type: 'mark_read'; interactionId: string; }
+interface GetProfileRequest { type: 'get_profile'; }
+interface GetDailyTasksRequest { type: 'get_daily_tasks'; }
+interface MultipleMarkReadRequest { type: 'multiple_mark_read'; interactionIds: string[]; }
+interface SearchAilocksRequest { type: 'search_ailocks'; query: string; }
+interface ReplyToMessageRequest { type: 'reply_to_message'; originalInteractionId: string; responseContent: string; context?: any; }
+interface ArchiveMessageRequest { type: 'archive_message'; interactionId: string; }
+interface SendMessageRequest { type: 'send_message'; toAilockId: string; content: string; messageType: 'clarify_intent' | 'provide_info' | 'collaboration_request' | 'response'; context?: any; }
+interface GetInteractionStatsRequest { type: 'get_interaction_stats'; }
+interface BulkArchiveRequest { type: 'bulk_archive'; interactionIds: string[]; }
+// Corrected the conflicting 'type' property
+interface GetUserGroupsRequest { type: 'get_user_groups'; groupType?: string; }
+interface GetGroupMembersRequest { type: 'get_group_members'; groupId: string; }
+interface GetGroupIntentsRequest { type: 'get_group_intents'; groupId: string; }
+interface GetGroupDetailsRequest { type: 'get_group_details'; groupId: string; }
+interface SearchUsersForInviteRequest { type: 'search_users_for_invite'; query: string; limit?: number; }
+interface GetIntentInteractionsRequest { type: 'get_intent_interactions'; intentId: string; }
+
+type BatchRequest =
+  | GetInboxRequest
+  | MarkReadRequest
+  | GetProfileRequest
+  | GetDailyTasksRequest
+  | MultipleMarkReadRequest
+  | SearchAilocksRequest
+  | ReplyToMessageRequest
+  | ArchiveMessageRequest
+  | SendMessageRequest
+  | GetInteractionStatsRequest
+  | BulkArchiveRequest
+  | GetUserGroupsRequest
+  | GetGroupMembersRequest
+  | GetGroupIntentsRequest
+  | GetGroupDetailsRequest
+  | SearchUsersForInviteRequest
+  | GetIntentInteractionsRequest;
+
+function responseWithCORS(statusCode: number, body: Record<string, unknown> | unknown[]): HandlerResponse {
   return {
     statusCode,
     headers: {
@@ -59,7 +101,7 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
   }
 
   try {
-    const body = JSON.parse(event.body || '{}');
+    const body: { requests?: BatchRequest[] } = JSON.parse(event.body || '{}');
     const { requests = [] } = body;
 
     if (!Array.isArray(requests) || requests.length === 0) {
@@ -73,9 +115,17 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
     const messageService = new AilockMessageService();
     const groupService = new GroupService();
 
+    // Helper for permission checks
+    const checkGroupPermission = async (groupId: string, allowedRoles: ('owner' | 'admin' | 'member' | 'guest')[]) => {
+      const hasAccess = await groupService.checkMemberPermission(groupId, userAilockId, allowedRoles);
+      if (!hasAccess) {
+        throw new Error(`Permission denied for group ${groupId}`);
+      }
+    };
+
     // Process all requests in parallel for better performance
     const results = await Promise.allSettled(
-      requests.map(async (req: any, index: number) => {
+      requests.map(async (req: BatchRequest, index: number) => {
         try {
           switch (req.type) {
             case 'get_inbox':
@@ -96,7 +146,7 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
               };
 
             case 'mark_read':
-              if (!req.interactionId) {
+              if (req.type === 'mark_read' && !req.interactionId) {
                 throw new Error('Missing interactionId for mark_read operation');
               }
               await messageService.markAsRead(req.interactionId, userAilockId);
@@ -120,7 +170,7 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
               };
 
             case 'multiple_mark_read':
-              if (!Array.isArray(req.interactionIds)) {
+              if (req.type === 'multiple_mark_read' && !Array.isArray(req.interactionIds)) {
                 throw new Error('Missing interactionIds array for multiple_mark_read operation');
               }
               const markResults = await Promise.allSettled(
@@ -129,17 +179,22 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
                 )
               );
               const successCount = markResults.filter(r => r.status === 'fulfilled').length;
-              return {
-                type: 'multiple_mark_read',
-                data: { 
-                  success: true, 
-                  processed: req.interactionIds.length,
-                  successful: successCount
-                }
-              };
+              if (req.type === 'multiple_mark_read') { // Type guard
+                return {
+                  type: 'multiple_mark_read',
+                  data: { 
+                    success: true, 
+                    processed: req.interactionIds.length,
+                    successful: successCount
+                  }
+                };
+              }
+              // This part should not be reached due to switch logic, but satisfies TS
+              throw new Error("Logic error in multiple_mark_read");
+
 
             case 'search_ailocks':
-              if (!req.query) {
+              if (req.type === 'search_ailocks' && !req.query) {
                 throw new Error('Missing query for search_ailocks operation');
               }
               const ailockSearchResults = await messageService.searchAilocksByName(req.query);
@@ -149,7 +204,7 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
               };
 
             case 'reply_to_message':
-              if (!req.originalInteractionId || !req.responseContent) {
+              if (req.type === 'reply_to_message' && (!req.originalInteractionId || !req.responseContent)) {
                 throw new Error('Missing originalInteractionId or responseContent for reply_to_message operation');
               }
               const replyResult = await messageService.respondToInteraction(
@@ -158,25 +213,33 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
                 req.responseContent,
                 req.context
               );
-              return {
-                type: 'reply_to_message',
-                data: replyResult
-              };
+              if (req.type === 'reply_to_message') { // Type guard
+                return {
+                  type: 'reply_to_message',
+                  data: replyResult
+                };
+              }
+              throw new Error("Logic error in reply_to_message");
+
 
             case 'archive_message':
-              if (!req.interactionId) {
+              if (req.type === 'archive_message' && !req.interactionId) {
                 throw new Error('Missing interactionId for archive_message operation');
               }
               // Архивирование сообщения (будет реализовано в message-service)
               // Пока что используем markAsRead как fallback
               await messageService.markAsRead(req.interactionId, userAilockId);
-              return {
-                type: 'archive_message',
-                data: { success: true, interactionId: req.interactionId, note: 'Archived as read (archive feature coming soon)' }
-              };
+              if (req.type === 'archive_message') {
+                return {
+                  type: 'archive_message',
+                  data: { success: true, interactionId: req.interactionId, note: 'Archived as read (archive feature coming soon)' }
+                };
+              }
+              throw new Error("Logic error in archive_message");
+
 
             case 'send_message':
-              if (!req.toAilockId || !req.content || !req.messageType) {
+              if (req.type === 'send_message' && (!req.toAilockId || !req.content || !req.messageType)) {
                 throw new Error('Missing required fields for send_message operation');
               }
               const sentMessage = await messageService.sendInteraction(
@@ -186,10 +249,14 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
                 req.messageType,
                 req.context
               );
-              return {
-                type: 'send_message',
-                data: sentMessage
-              };
+              if (req.type === 'send_message') {
+                return {
+                  type: 'send_message',
+                  data: sentMessage
+                };
+              }
+              throw new Error("Logic error in send_message");
+
 
             case 'get_interaction_stats':
               const stats = await messageService.getInteractionStats(userAilockId);
@@ -199,7 +266,7 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
               };
 
             case 'bulk_archive':
-              if (!Array.isArray(req.interactionIds)) {
+              if (req.type === 'bulk_archive' && !Array.isArray(req.interactionIds)) {
                 throw new Error('Missing interactionIds array for bulk_archive operation');
               }
               // Пакетное архивирование (пока что используем multiple_mark_read)
@@ -223,7 +290,7 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
             case 'get_user_groups':
               const groups = await groupService.getUserGroups(
                 userAilockId, 
-                req.type || undefined
+                req.groupType
               );
               return {
                 type: 'get_user_groups',
@@ -231,20 +298,10 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
               };
 
             case 'get_group_members':
-              if (!req.groupId) {
+              if (req.type !== 'get_group_members' || !req.groupId) {
                 throw new Error('Missing groupId for get_group_members operation');
               }
-              // Проверяем права доступа
-              const hasMembersAccess = await groupService.checkMemberPermission(
-                req.groupId,
-                userAilockId,
-                ['owner', 'admin', 'member', 'guest']
-              );
-              
-              if (!hasMembersAccess) {
-                throw new Error('Permission denied');
-              }
-              
+              await checkGroupPermission(req.groupId, ['owner', 'admin', 'member', 'guest']);
               const members = await groupService.getGroupMembers(req.groupId);
               return {
                 type: 'get_group_members',
@@ -252,20 +309,10 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
               };
 
             case 'get_group_intents':
-              if (!req.groupId) {
+              if (req.type !== 'get_group_intents' || !req.groupId) {
                 throw new Error('Missing groupId for get_group_intents operation');
               }
-              // Проверяем права доступа
-              const hasIntentsAccess = await groupService.checkMemberPermission(
-                req.groupId,
-                userAilockId,
-                ['owner', 'admin', 'member', 'guest']
-              );
-              
-              if (!hasIntentsAccess) {
-                throw new Error('Permission denied');
-              }
-              
+              await checkGroupPermission(req.groupId, ['owner', 'admin', 'member', 'guest']);
               const intents = await groupService.getGroupIntents(req.groupId);
               return {
                 type: 'get_group_intents',
@@ -273,20 +320,10 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
               };
 
             case 'get_group_details':
-              if (!req.groupId) {
+              if (req.type !== 'get_group_details' || !req.groupId) {
                 throw new Error('Missing groupId for get_group_details operation');
               }
-              // Проверяем права доступа
-              const hasDetailsAccess = await groupService.checkMemberPermission(
-                req.groupId,
-                userAilockId,
-                ['owner', 'admin', 'member', 'guest']
-              );
-              
-              if (!hasDetailsAccess) {
-                throw new Error('Permission denied');
-              }
-              
+              await checkGroupPermission(req.groupId, ['owner', 'admin', 'member', 'guest']);
               const group = await groupService.getGroup(req.groupId);
               const groupMembers = await groupService.getGroupMembers(req.groupId);
               const groupIntents = await groupService.getGroupIntents(req.groupId);
@@ -305,7 +342,7 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
               };
 
             case 'search_users_for_invite':
-              if (!req.query) {
+              if (req.type !== 'search_users_for_invite' || !req.query) {
                 throw new Error('Missing query for search_users_for_invite operation');
               }
               
@@ -315,8 +352,18 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
                 data: { users: userSearchResults }
               };
 
+            case 'get_intent_interactions':
+              if (req.type !== 'get_intent_interactions' || !req.intentId) {
+                throw new Error('Missing intentId for get_intent_interactions operation');
+              }
+              const { intentId } = req;
+              const result = await handleGetIntentInteractions(intentId, userAilockId);
+              return { type: 'get_intent_interactions', data: result };
+
             default:
-              throw new Error(`Unknown request type: ${req.type}`);
+              // This should be unreachable if BatchRequest is a comprehensive discriminated union
+              const exhaustiveCheck: never = req;
+              throw new Error(`Unknown request type: ${(exhaustiveCheck as any)?.type}`);
           }
         } catch (error) {
           console.error(`Batch operation ${index} (${req.type}) failed:`, error);
@@ -378,5 +425,96 @@ async function getUnreadCount(ailockId: string): Promise<number> {
   } catch (error) {
     console.error('Failed to get unread count:', error);
     return 0;
+  }
+} 
+
+interface ClientContext {
+  user: {
+    sub: string;
+  };
+}
+
+async function handleGetIntentInteractions(intentId: string, userId: string): Promise<any> {
+  try {
+    const interactions = await withDbRetry(async () => {
+      const userAilock = await db.query.ailocks.findFirst({ where: eq(schema.ailocks.userId, userId) });
+      if (!userAilock) {
+        throw new Error('Could not find an Ailock profile for the current user.');
+      }
+      const currentUserAilockId = userAilock.id;
+
+      const groupIntent = await db.query.groupIntents.findFirst({
+        where: eq(schema.groupIntents.intentId, intentId),
+        with: {
+          group: {
+            with: {
+              members: {
+                where: eq(schema.groupMembers.userId, userId)
+              }
+            }
+          }
+        }
+      });
+      
+      const isMemberOfGroup = !!groupIntent?.group.members.length;
+
+      const accessClauses = [];
+
+      // Condition 1: Direct messages (toAilockId is not null)
+      accessClauses.push(
+        and(
+          isNotNull(schema.ailockInteractions.toAilockId),
+          or(
+            eq(schema.ailockInteractions.fromAilockId, currentUserAilockId),
+            eq(schema.ailockInteractions.toAilockId, currentUserAilockId)
+          )
+        )
+      );
+
+      // Condition 2: Group messages (toAilockId is null)
+      if (isMemberOfGroup) {
+        accessClauses.push(isNull(schema.ailockInteractions.toAilockId));
+      }
+      
+      // We must have at least one access clause. The first one is unconditional.
+      const combinedAccessClause = or(...accessClauses);
+
+      if (!combinedAccessClause) {
+        // This should be unreachable, but acts as a safeguard.
+        return [];
+      }
+
+      return db.query.ailockInteractions.findMany({
+        where: and(
+          eq(schema.ailockInteractions.intentId, intentId),
+          combinedAccessClause,
+        ),
+        with: {
+          fromAilock: {
+            columns: {
+              name: true,
+              level: true,
+            }
+          }
+        },
+        orderBy: [asc(schema.ailockInteractions.createdAt)],
+      });
+    });
+    
+    // Map the result to include sender's name and level
+    // Note: The field in the db is `messageContent`, not `content`. We map it for client consistency.
+    return interactions.map(interaction => ({
+      ...interaction,
+      content: interaction.messageContent, 
+      type: interaction.interactionType,
+      fromAilockName: interaction.fromAilock?.name || 'Unknown',
+      fromAilockLevel: interaction.fromAilock?.level || 1,
+    }));
+
+  } catch (e: unknown) {
+    console.error('Error fetching intent interactions:', e);
+    const message = e instanceof Error ? e.message : 'An unknown error occurred';
+    // Re-throw a more specific error to be caught by the main handler
+    throw new Error(`Failed to fetch intent interactions: ${message}`);
   }
 } 

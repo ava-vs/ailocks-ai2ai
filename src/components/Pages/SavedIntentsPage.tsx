@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Search, Star, MapPin, Calendar, Filter, Grid, List, Trash2, ExternalLink, Share2, Download } from 'lucide-react';
+import { ArrowLeft, Search, Star, MapPin, Grid, List, Trash2, ExternalLink, Share2, Download } from 'lucide-react';
 import { useUserSession } from '@/hooks/useUserSession';
 import { useLocation } from '@/hooks/useLocation';
 

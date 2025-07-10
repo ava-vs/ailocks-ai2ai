@@ -16,6 +16,11 @@ import {
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
+export const groupTypeEnum = pgEnum('group_type_enum', ['family', 'team', 'friends']);
+export const groupRoleEnum = pgEnum('group_role_enum', ['owner', 'admin', 'member', 'guest']);
+export const inviteStatusEnum = pgEnum('invite_status_enum', ['pending', 'accepted', 'declined']);
+export const notificationTypeEnum = pgEnum('notification_type_enum', ['message', 'invite', 'intent']);
+
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
   email: varchar('email', { length: 255 }).unique().notNull(),
@@ -191,7 +196,7 @@ export const chatSummaries = pgTable('chat_summaries', {
 export const ailockInteractions = pgTable('ailock_interactions', {
   id: uuid('id').defaultRandom().primaryKey(),
   fromAilockId: uuid('from_ailock_id').references(() => ailocks.id).notNull(),
-  toAilockId: uuid('to_ailock_id').references(() => ailocks.id).notNull(),
+  toAilockId: uuid('to_ailock_id').references(() => ailocks.id), // Made nullable for group messages
   
   // Integration with existing systems
   sessionId: varchar('session_id', { length: 255 }), // references chat_sessions.blob_key
@@ -252,10 +257,10 @@ export const userTasks = pgTable('user_tasks', {
 export const notifications = pgTable('notifications', {
   id: uuid('id').defaultRandom().primaryKey(),
   userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
-  type: varchar('type', { length: 50 }).notNull(), // 'message', 'invite', 'intent'
+  type: notificationTypeEnum('type').notNull(),
   title: varchar('title', { length: 255 }).notNull(),
   message: text('message').notNull(),
-  groupId: uuid('group_id').references(() => users.id, { onDelete: 'set null' }),
+  groupId: uuid('group_id').references(() => groups.id, { onDelete: 'set null' }),
   senderId: uuid('sender_id').references(() => users.id, { onDelete: 'set null' }),
   read: boolean('read').default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
@@ -269,6 +274,67 @@ export const notifications = pgTable('notifications', {
     createdAtIdx: index('idx_notifications_created_at').on(table.createdAt),
   };
 });
+
+// Group-related tables
+export const groups = pgTable('groups', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: varchar('name', { length: 255 }).notNull(),
+  description: text('description'),
+  createdBy: uuid('created_by').references(() => users.id).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  type: groupTypeEnum('type').notNull(),
+  status: varchar('status', { length: 50 }).default('active'),
+  settings: jsonb('settings').default({}),
+});
+
+export const groupMembers = pgTable('group_members', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  groupId: uuid('group_id').references(() => groups.id, { onDelete: 'cascade' }).notNull(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  ailockId: uuid('ailock_id').references(() => ailocks.id, { onDelete: 'cascade' }).notNull(),
+  role: groupRoleEnum('role').notNull(),
+  inviteStatus: inviteStatusEnum('invite_status').default('accepted'),
+  joinedAt: timestamp('joined_at', { withTimezone: true }).defaultNow(),
+  invitedBy: uuid('invited_by').references(() => users.id, { onDelete: 'set null' }),
+}, (table) => {
+  return {
+    uniqueMember: unique().on(table.groupId, table.ailockId),
+    groupIdx: index('idx_group_members_group_id').on(table.groupId),
+    userIdx: index('idx_group_members_user_id').on(table.userId),
+  };
+});
+
+export const groupIntents = pgTable('group_intents', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  groupId: uuid('group_id').references(() => groups.id, { onDelete: 'cascade' }).notNull(),
+  intentId: uuid('intent_id').references(() => intents.id, { onDelete: 'cascade' }).notNull(),
+  addedBy: uuid('added_by').references(() => users.id).notNull(),
+  addedAt: timestamp('added_at', { withTimezone: true }).defaultNow(),
+  permissions: jsonb('permissions').default({}),
+}, (table) => {
+  return {
+    uniqueIntent: unique().on(table.groupId, table.intentId),
+    groupIdx: index('idx_group_intents_group_id').on(table.groupId),
+    intentIdx: index('idx_group_intents_intent_id').on(table.intentId),
+  };
+});
+
+export const groupInvites = pgTable('group_invites', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  groupId: uuid('group_id').references(() => groups.id, { onDelete: 'cascade' }).notNull(),
+  email: varchar('email', { length: 255 }).notNull(),
+  role: groupRoleEnum('role').notNull(),
+  token: uuid('token').notNull().defaultRandom(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  status: inviteStatusEnum('status').default('pending'),
+}, (table) => {
+  return {
+    uniqueInvite: unique().on(table.groupId, table.email),
+  }
+});
+
 
 // RELATIONS
 
@@ -287,6 +353,10 @@ export const usersRelations = relations(users, ({ one, many }) => ({
     references: [chatSummaries.userId]
   }),
   userTasks: many(userTasks),
+  // Group relations
+  groupMemberships: many(groupMembers),
+  createdGroups: many(groups),
+  notifications: many(notifications),
 }));
 
 export const ailocksRelations = relations(ailocks, ({ one, many }) => ({
@@ -299,6 +369,10 @@ export const ailocksRelations = relations(ailocks, ({ one, many }) => ({
   achievements: many(ailockAchievements),
   sentInteractions: many(ailockInteractions, { relationName: 'fromAilock'}),
   receivedInteractions: many(ailockInteractions, { relationName: 'toAilock'}),
+  groupMembership: one(groupMembers, {
+    fields: [ailocks.id],
+    references: [groupMembers.ailockId]
+  }),
 }));
 
 export const ailockSkillsRelations = relations(ailockSkills, ({ one }) => ({
@@ -332,6 +406,7 @@ export const intentsRelations = relations(intents, ({ one, many }) => ({
     references: [smartChains.rootIntentId]
   }),
   userInWorkIntents: many(userInWorkIntents),
+  groupIntents: many(groupIntents),
 }));
 
 export const userInWorkIntentsRelations = relations(userInWorkIntents, ({ one }) => ({
@@ -370,5 +445,71 @@ export const userTasksRelations = relations(userTasks, ({ one }) => ({
   taskDefinition: one(taskDefinitions, {
     fields: [userTasks.taskId],
     references: [taskDefinitions.id],
+  }),
+}));
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, {
+    fields: [notifications.userId],
+    references: [users.id],
+  }),
+  group: one(groups, {
+    fields: [notifications.groupId],
+    references: [groups.id],
+  }),
+  sender: one(users, {
+    fields: [notifications.senderId],
+    references: [users.id],
+  }),
+}));
+
+export const groupsRelations = relations(groups, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [groups.createdBy],
+    references: [users.id],
+  }),
+  members: many(groupMembers),
+  intents: many(groupIntents),
+  invites: many(groupInvites),
+}));
+
+export const groupMembersRelations = relations(groupMembers, ({ one }) => ({
+  group: one(groups, {
+    fields: [groupMembers.groupId],
+    references: [groups.id],
+  }),
+  user: one(users, {
+    fields: [groupMembers.userId],
+    references: [users.id],
+  }),
+  ailock: one(ailocks, {
+    fields: [groupMembers.ailockId],
+    references: [ailocks.id],
+  }),
+  inviter: one(users, {
+    fields: [groupMembers.invitedBy],
+    references: [users.id]
+  }),
+}));
+
+export const groupIntentsRelations = relations(groupIntents, ({ one }) => ({
+  group: one(groups, {
+    fields: [groupIntents.groupId],
+    references: [groups.id],
+  }),
+  intent: one(intents, {
+    fields: [groupIntents.intentId],
+    references: [intents.id],
+  }),
+  adder: one(users, {
+    fields: [groupIntents.addedBy],
+    references: [users.id],
+  }),
+}));
+
+export const groupInvitesRelations = relations(groupInvites, ({ one }) => ({
+  group: one(groups, {
+    fields: [groupInvites.groupId],
+    references: [groups.id],
   }),
 }));
