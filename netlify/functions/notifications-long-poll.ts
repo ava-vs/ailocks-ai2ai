@@ -89,8 +89,11 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
     console.error('Long-polling error:', error);
     return response(500, { error: 'Internal Server Error' });
   } finally {
-    // It's crucial to unlisten and end the client to prevent connection leaks.
-    client.query(`UNLISTEN "${channel}"`).catch(err => console.error('Error unlistening from PG channel:', err));
-    await client.end().catch(err => console.error('Error ending PG client:', err));
+    // Closing the connection is enough – the server automatically clears LISTEN registrations
+    try {
+      await client.end();
+    } catch (err) {
+      console.error('Error ending PG client:', err);
+    }
   }
 }; 

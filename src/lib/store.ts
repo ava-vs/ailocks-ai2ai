@@ -126,18 +126,26 @@ export interface AilockState {
   profile: FullAilockProfile | null;
   isLoading: boolean;
   error: string | null;
+  lastFetched: number; // epoch ms when profile was last successfully fetched
+  CACHE_TTL: number;   // ttl in ms (allows dynamic tuning)
 }
+
+// Cache TTL (ms) for Ailock profile stored in the global store
+const DEFAULT_CACHE_TTL = 30_000;
 
 export const ailockStore = map<AilockState>({
   profile: null,
   isLoading: false,
   error: null,
+  lastFetched: 0,
+  CACHE_TTL: DEFAULT_CACHE_TTL,
 });
 
 export function setAilockProfile(profile: FullAilockProfile | null) {
   ailockStore.setKey('profile', profile);
   ailockStore.setKey('isLoading', false);
   ailockStore.setKey('error', null);
+  ailockStore.setKey('lastFetched', Date.now());
 }
 
 export function setAilockLoading(isLoading: boolean) {

@@ -1,4 +1,5 @@
 import type { FullAilockProfile, XpEventType } from './shared';
+import { ailockStore, setAilockProfile, setAilockLoading, setAilockError } from '@/lib/store';
 
 const API_BASE_URL = '/.netlify/functions';
 
@@ -10,13 +11,37 @@ export async function getProfile(userId: string): Promise<FullAilockProfile> {
   if (!userId || userId === 'loading') {
     throw new Error('Valid user ID is required to fetch Ailock profile.');
   }
-  const response = await fetch(`${API_BASE_URL}/ailock-profile?userId=${userId}`);
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: 'Failed to fetch profile', details: response.statusText }));
-    throw new Error(errorData.details || errorData.error);
+
+  const state = (ailockStore as any).get();
+
+  // Serve from store if we already have a fresh copy
+  if (
+    state.profile &&
+    state.profile.userId === userId &&
+    Date.now() - state.lastFetched < state.CACHE_TTL
+  ) {
+    return state.profile;
   }
-  const data = await response.json();
-  return data.profile;
+
+  try {
+    setAilockLoading(true);
+    const response = await fetch(`${API_BASE_URL}/ailock-profile?userId=${userId}`);
+    if (!response.ok) {
+      const errorData = await response
+        .json()
+        .catch(() => ({ error: 'Failed to fetch profile', details: response.statusText }));
+      throw new Error(errorData.details || errorData.error);
+    }
+
+    const data = await response.json();
+    setAilockProfile(data.profile);
+    // also update timestamp
+    ailockStore.setKey('lastFetched', Date.now());
+    return data.profile;
+  } catch (err: any) {
+    setAilockError(err.message || 'Failed to fetch profile');
+    throw err;
+  }
 }
 
 /**

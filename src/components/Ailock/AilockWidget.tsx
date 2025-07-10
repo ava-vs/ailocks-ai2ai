@@ -2,22 +2,15 @@ import { useState, useEffect } from 'react';
 import { Star, Settings, Mic, Square } from 'lucide-react';
 import AilockDashboard from './AilockDashboard';
 import { ailockApi } from '@/lib/ailock/api';
-import type { FullAilockProfile } from '@/lib/ailock/shared';
 import { getLevelInfo } from '@/lib/ailock/shared';
 import { useUserSession } from '@/hooks/useUserSession';
+import { useAilock } from '@/hooks/useAilock';
 
 export default function AilockWidget() {
   const { currentUser } = useUserSession();
-  const [profile, setProfile] = useState<FullAilockProfile | null>(null);
+  const { profile, isLoading: loading } = useAilock();
   const [isDashboardOpen, setIsDashboardOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [voiceStatus, setVoiceStatus] = useState<'idle' | 'listening' | 'speaking' | 'processing'>('idle');
-
-  useEffect(() => {
-    if (currentUser.id && currentUser.id !== 'loading') {
-      loadProfile();
-    }
-  }, [currentUser.id]);
 
   useEffect(() => {
     const handleVoiceStatus = (e: any) => {
@@ -27,24 +20,12 @@ export default function AilockWidget() {
     return () => window.removeEventListener('voice-status-update', handleVoiceStatus);
   }, []);
 
-  const loadProfile = async () => {
-    try {
-      setLoading(true);
-      const ailockProfile = await ailockApi.getProfile(currentUser.id);
-      setProfile(ailockProfile);
-    } catch (error) {
-      console.error('Failed to load Ailock profile:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleSkillUpgrade = async (skillId: string) => {
     if (!profile) return;
     
     try {
       await ailockApi.upgradeSkill(profile.id, skillId);
-      await loadProfile(); // Refresh profile
+      await ailockApi.getProfile(profile.id); // Refresh global store (and subscribers)
       // Notify other components about profile update
       window.dispatchEvent(new CustomEvent('ailock-profile-updated'));
     } catch (error) {

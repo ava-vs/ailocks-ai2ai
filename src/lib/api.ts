@@ -1,5 +1,7 @@
 // AICODE-NOTE: Central API configuration point
 // All serverless function calls are routed through this base path
+import type { AilockInteraction } from '@/types/ailock-interactions';
+
 const API_BASE = '/.netlify/functions';
 
 export const searchIntents = async (query: string) => {
@@ -223,30 +225,18 @@ export const replyAilockMessage = async ({
 }; 
 
 export const getIntentInteractions = async (intentId: string) => {
-  if (!intentId) {
-    throw new Error('Intent ID is required to fetch interactions.');
-  }
-
-  const response = await fetch('/.netlify/functions/ailock-batch', {
+  const res = await fetch('/.netlify/functions/ailock-batch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',          // ⬅ auth cookies
     body: JSON.stringify({
-      requests: [{ type: 'get_intent_interactions', intentId: intentId }]
+      requests: [{ type: 'get_intent_interactions', intentId }]
     })
   });
+  if (!res.ok) throw new Error(await res.text());
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    console.error('Failed to fetch intent interactions:', errorBody);
-    throw new Error(`Failed to fetch interactions: ${response.statusText}`);
-  }
-
-  const result = await response.json();
-
-  const interactionResult = result.batch_results[0];
-  if (interactionResult.status === 'error') {
-    throw new Error(interactionResult.message);
-  }
-
-  return interactionResult.body;
+  const json = await res.json();
+  const item = json.results[0];      // актуальное имя поля
+  if (!item.success) throw new Error(item.error || 'Failed');
+  return item.data as AilockInteraction[];
 }; 

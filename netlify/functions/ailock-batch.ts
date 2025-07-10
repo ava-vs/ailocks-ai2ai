@@ -434,14 +434,14 @@ interface ClientContext {
   };
 }
 
-async function handleGetIntentInteractions(intentId: string, userId: string): Promise<any> {
+async function handleGetIntentInteractions(intentId: string, currentAilockId: string): Promise<any> {
   try {
     const interactions = await withDbRetry(async () => {
-      const userAilock = await db.query.ailocks.findFirst({ where: eq(schema.ailocks.userId, userId) });
-      if (!userAilock) {
-        throw new Error('Could not find an Ailock profile for the current user.');
-      }
-      const currentUserAilockId = userAilock.id;
+      const ailock = await db.query.ailocks.findFirst({
+        where: eq(schema.ailocks.id, currentAilockId)
+      });
+      if (!ailock) throw new Error('Ailock not found');
+      const currentUserId = ailock.userId;
 
       const groupIntent = await db.query.groupIntents.findFirst({
         where: eq(schema.groupIntents.intentId, intentId),
@@ -449,7 +449,7 @@ async function handleGetIntentInteractions(intentId: string, userId: string): Pr
           group: {
             with: {
               members: {
-                where: eq(schema.groupMembers.userId, userId)
+                where: eq(schema.groupMembers.userId, currentUserId)
               }
             }
           }
@@ -465,8 +465,8 @@ async function handleGetIntentInteractions(intentId: string, userId: string): Pr
         and(
           isNotNull(schema.ailockInteractions.toAilockId),
           or(
-            eq(schema.ailockInteractions.fromAilockId, currentUserAilockId),
-            eq(schema.ailockInteractions.toAilockId, currentUserAilockId)
+            eq(schema.ailockInteractions.fromAilockId, currentUserId),
+            eq(schema.ailockInteractions.toAilockId, currentUserId)
           )
         )
       );
@@ -503,12 +503,23 @@ async function handleGetIntentInteractions(intentId: string, userId: string): Pr
     
     // Map the result to include sender's name and level
     // Note: The field in the db is `messageContent`, not `content`. We map it for client consistency.
-    return interactions.map(interaction => ({
-      ...interaction,
-      content: interaction.messageContent, 
-      type: interaction.interactionType,
-      fromAilockName: interaction.fromAilock?.name || 'Unknown',
-      fromAilockLevel: interaction.fromAilock?.level || 1,
+    return interactions.map(i => ({
+      id: i.id,
+      fromAilockId: i.fromAilockId,
+      toAilockId: i.toAilockId,
+      intentId: i.intentId,
+      sessionId: i.sessionId,
+      parentInteractionId: i.parentInteractionId,
+      chainId: i.chainId,
+      priority: i.priority,
+      status: i.status,
+      createdAt: i.createdAt,
+      readAt: i.readAt,
+      respondedAt: i.respondedAt,
+      type: i.interactionType,
+      content: i.messageContent,
+      fromAilockName: i.fromAilock?.name,
+      fromAilockLevel: i.fromAilock?.level
     }));
 
   } catch (e: unknown) {

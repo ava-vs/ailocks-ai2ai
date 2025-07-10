@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useUserSession } from '@/hooks/useUserSession';
+import { useAilock } from '@/hooks/useAilock';
 import { ailockApi } from '@/lib/ailock/api';
-import type { FullAilockProfile, AilockSkill, AilockAchievement, XpEvent } from '@/lib/ailock/shared';
+import type { AilockSkill, AilockAchievement, XpEvent } from '@/lib/ailock/shared';
 import { getLevelInfo, getSkillEffect } from '@/lib/ailock/shared';
 import { SKILL_TREE, BRANCH_COLORS } from '@/lib/ailock/skills';
 import AilockAvatar from './AilockAvatar';
@@ -12,40 +13,19 @@ import { ArrowLeft, Star, Zap, Trophy, TrendingUp, CheckCircle, Clock, Award, Br
 
 export default function MyAilockPage() {
   const { currentUser } = useUserSession();
-  const [profile, setProfile] = useState<FullAilockProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'skills' | 'achievements'>('overview');
-  const [hoveredSkill, setHoveredSkill] = useState<string | null>(null);
+  const { profile, isLoading: loading, error } = useAilock();
+  // const [ setActiveTab] = useState<'overview' | 'skills' | 'achievements'>('overview');
+  // const [hoveredSkill, setHoveredSkill] = useState<string | null>(null);
   const { tasks: dailyTasks, loading: tasksLoading, error: tasksError } = useDailyTasks();
 
-  // Load Ailock profile once the authenticated user's ID is available
-  useEffect(() => {
-    if (currentUser.id && currentUser.id !== 'loading') {
-      loadProfile(currentUser.id);
-    }
-  }, [currentUser.id]);
-
-  const loadProfile = async (userId: string) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const ailockProfile = await ailockApi.getProfile(userId);
-      setProfile(ailockProfile);
-    } catch (err) {
-      console.error('Failed to load Ailock profile:', err);
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Profile loading is handled by useAilock; no local fetch logic required
 
   const handleSkillUpgrade = async (skillId: string) => {
     if (!profile) return;
     
     try {
       await ailockApi.upgradeSkill(profile.id, skillId);
-      await loadProfile(profile.id); // Refresh profile
+      await ailockApi.getProfile(currentUser.id); // Refresh global store
       // Notify other components about profile update
       window.dispatchEvent(new CustomEvent('ailock-profile-updated'));
     } catch (err) {
@@ -75,7 +55,7 @@ export default function MyAilockPage() {
           <h2 className="text-white text-xl font-semibold mb-2">Failed to Load Ailock</h2>
           <p className="text-white/60 mb-6">{error}</p>
           <button 
-            onClick={() => loadProfile(currentUser.id)} 
+            onClick={() => ailockApi.getProfile(currentUser.id)} 
             className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
           >
             Try Again

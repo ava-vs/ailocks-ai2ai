@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { useUserSession } from '@/hooks/useUserSession';
 import { useAuth } from '@/hooks/useAuth';
-import { ailockApi } from '@/lib/ailock/api';
-import type { FullAilockProfile } from '@/lib/ailock/shared';
+import { useAilock } from '@/hooks/useAilock';
 import { getLevelInfo } from '@/lib/ailock/shared';
 import { AilockInboxService, type InboxState } from '@/lib/ailock/inbox-service';
 import AilockQuickStatus from './AilockQuickStatus';
@@ -12,8 +11,7 @@ import AilockInboxWidget from './AilockInboxWidget';
 export default function AilockHeaderWidget() {
   const { currentUser } = useUserSession();
   const { user: authUser } = useAuth();
-  const [profile, setProfile] = useState<FullAilockProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { profile, isLoading: loading } = useAilock();
   const [isQuickStatusOpen, setIsQuickStatusOpen] = useState(false);
   const [isInboxOpen, setIsInboxOpen] = useState(false);
   const [inboxState, setInboxState] = useState<InboxState>({
@@ -30,7 +28,6 @@ export default function AilockHeaderWidget() {
 
   useEffect(() => {
     if (userId && userId !== 'loading') {
-      loadProfile();
       initializeInboxService();
     }
   }, [userId]);
@@ -57,40 +54,7 @@ export default function AilockHeaderWidget() {
     }
   };
 
-  // Listen for profile updates from other components
-  useEffect(() => {
-    const handleProfileUpdate = () => {
-      if (userId && userId !== 'loading') {
-        loadProfile();
-      }
-    };
-
-    window.addEventListener('ailock-profile-updated', handleProfileUpdate);
-    
-    return () => {
-      window.removeEventListener('ailock-profile-updated', handleProfileUpdate);
-    };
-  }, [userId]);
-
-  const loadProfile = async () => {
-    if (!userId || userId === 'loading') return;
-    
-    try {
-      setLoading(true);
-      const ailockProfile = await ailockApi.getProfile(userId);
-      setProfile(ailockProfile);
-      console.log('✅ Ailock profile loaded successfully:', ailockProfile?.name);
-    } catch (error) {
-      console.error('Failed to load Ailock profile for header:', error);
-      // For authenticated users, we might not have an Ailock profile yet
-      if (authUser) {
-        console.log('Creating new Ailock profile for authenticated user...');
-        // The profile will be created automatically when needed
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Local profile loading handled by useAilock()
 
   const handleOpenInbox = () => {
     setIsInboxOpen(true);
