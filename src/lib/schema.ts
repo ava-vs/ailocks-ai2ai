@@ -12,7 +12,8 @@ import {
   primaryKey,
   date,
   unique,
-  index
+  index,
+  numeric
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -20,6 +21,9 @@ export const groupTypeEnum = pgEnum('group_type_enum', ['family', 'team', 'frien
 export const groupRoleEnum = pgEnum('group_role_enum', ['owner', 'admin', 'member', 'guest']);
 export const inviteStatusEnum = pgEnum('invite_status_enum', ['pending', 'accepted', 'declined']);
 export const notificationTypeEnum = pgEnum('notification_type_enum', ['message', 'invite', 'intent']);
+export const originEnum = pgEnum('origin_enum', ['LOCAL', 'ESCROW']);
+export const syncDirectionEnum = pgEnum('sync_direction_enum', ['PULL', 'PUSH']);
+export const syncStatusEnum = pgEnum('sync_status_enum', ['SUCCESS', 'FAIL', 'SKIPPED']);
 
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -60,6 +64,11 @@ export const intents = pgTable('intents', {
   timeline: varchar('timeline', { length: 255 }),
   priority: varchar('priority', { length: 20 }).default('normal'),
   status: varchar('status', { length: 20 }).default('active'),
+  // Escrow API integration
+  origin: originEnum('origin').default('LOCAL'),
+  escrowOrderId: uuid('escrow_order_id'),
+  totalAmount: numeric('total_amount', { precision: 18, scale: 2 }),
+  fundedAmount: numeric('funded_amount', { precision: 18, scale: 2 }),
   // Vector embedding support
   embedding: vector('embedding', { dimensions: 1536 }),
   embeddingModel: varchar('embedding_model', { length: 50 }).default('text-embedding-3-small'),
@@ -335,6 +344,41 @@ export const groupInvites = pgTable('group_invites', {
   }
 });
 
+// Escrow API Integration Tables
+export const intentSyncLog = pgTable('intent_sync_log', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  intentId: uuid('intent_id').references(() => intents.id, { onDelete: 'cascade' }),
+  direction: syncDirectionEnum('direction').notNull(),
+  status: syncStatusEnum('status').notNull(),
+  payload: jsonb('payload'),
+  error: text('error'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+}, (table) => {
+  return {
+    intentIdx: index('idx_intent_sync_log_intent_id').on(table.intentId),
+    statusIdx: index('idx_intent_sync_log_status').on(table.status),
+    directionIdx: index('idx_intent_sync_log_direction').on(table.direction),
+    createdAtIdx: index('idx_intent_sync_log_created_at').on(table.createdAt),
+  }
+});
+
+export const milestones = pgTable('milestones', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  intentId: uuid('intent_id').references(() => intents.id, { onDelete: 'cascade' }).notNull(),
+  title: varchar('title', { length: 255 }).notNull(),
+  description: text('description'),
+  amount: numeric('amount', { precision: 18, scale: 2 }).notNull(),
+  deadline: timestamp('deadline', { withTimezone: true }),
+  status: varchar('status', { length: 20 }).default('pending'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => {
+  return {
+    intentIdx: index('idx_milestones_intent_id').on(table.intentId),
+    statusIdx: index('idx_milestones_status').on(table.status),
+  }
+});
+
 
 // RELATIONS
 
@@ -401,6 +445,8 @@ export const intentsRelations = relations(intents, ({ one, many }) => ({
     fields: [intents.userId],
     references: [users.id],
   }),
+  syncLogs: many(intentSyncLog),
+  milestones: many(milestones),
   smartChain: one(smartChains, {
     fields: [intents.id],
     references: [smartChains.rootIntentId]
@@ -511,5 +557,19 @@ export const groupInvitesRelations = relations(groupInvites, ({ one }) => ({
   group: one(groups, {
     fields: [groupInvites.groupId],
     references: [groups.id],
+  }),
+}));
+
+export const intentSyncLogRelations = relations(intentSyncLog, ({ one }) => ({
+  intent: one(intents, {
+    fields: [intentSyncLog.intentId],
+    references: [intents.id],
+  }),
+}));
+
+export const milestonesRelations = relations(milestones, ({ one }) => ({
+  intent: one(intents, {
+    fields: [milestones.intentId],
+    references: [intents.id],
   }),
 }));

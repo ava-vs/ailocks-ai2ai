@@ -22,9 +22,7 @@ export default function GlobalServiceInitializer() {
 
     // Cleanup services when user logs out
     return () => {
-      if (!userId || userId === 'loading') {
-        cleanupGlobalServices();
-      }
+      cleanupGlobalServices();
     };
   }, [userId]);
 

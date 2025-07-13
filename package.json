@@ -19,6 +19,9 @@
     "db:seed:demo": "node scripts/seed-demo.cjs",
     "db:migrate": "node scripts/apply-migrations.cjs",
     "check:env": "node scripts/check-env.cjs",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
     "test:db": "curl http://localhost:8888/.netlify/functions/db-status || curl http://localhost:4321/.netlify/functions/db-status",
     "test:intents": "curl http://localhost:8888/.netlify/functions/intents-list || curl http://localhost:4321/.netlify/functions/intents-list",
     "test:embeddings": "curl http://localhost:8888/.netlify/functions/embedding-health || curl http://localhost:4321/.netlify/functions/embedding-health",
@@ -42,6 +45,8 @@
     "@tailwindcss/forms": "^0.5.10",
     "@types/react-router-dom": "^5.3.3",
     "astro": "^5.9.2",
+    "axios": "^1.10.0",
+    "axios-retry": "^3.9.1",
     "bcryptjs": "^3.0.2",
     "clsx": "^2.1.1",
     "cookie": "^0.6.0",
@@ -68,15 +73,21 @@
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@types/axios": "^0.14.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/cookie": "^0.6.0",
+    "@types/jest": "^29.5.10",
     "@types/jsonwebtoken": "^9.0.2",
     "@types/node": "^20.19.0",
     "@types/pg": "^8.15.4",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "@types/uuid": "^9.0.7",
+    "axios-mock-adapter": "^1.22.0",
     "dotenv": "^16.4.5",
     "drizzle-kit": "^0.31.1",
-    "npm-run-all": "^4.1.5"
+    "jest": "^29.7.0",
+    "npm-run-all": "^4.1.5",
+    "ts-jest": "^29.1.1"
   }
 }

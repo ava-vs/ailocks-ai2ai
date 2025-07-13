@@ -1,13 +1,13 @@
-import { useState } from 'react';
+// import { useState } from 'react';
 import { useUserSession } from '@/hooks/useUserSession';
 import { useAilock } from '@/hooks/useAilock';
 import { ailockApi } from '@/lib/ailock/api';
-import type { AilockSkill, AilockAchievement, XpEvent } from '@/lib/ailock/shared';
-import { getLevelInfo, getSkillEffect } from '@/lib/ailock/shared';
-import { SKILL_TREE, BRANCH_COLORS } from '@/lib/ailock/skills';
-import AilockAvatar from './AilockAvatar';
-import CharacteristicsPanel from './CharacteristicsPanel';
-import SkillTreeCanvas from './SkillTreeCanvas';
+// import type { AilockSkill, AilockAchievement, XpEvent } from '@/lib/ailock/shared';
+import { getLevelInfo } from '@/lib/ailock/shared';
+// import { SKILL_TREE, BRANCH_COLORS } from '@/lib/ailock/skills';
+// import AilockAvatar from './AilockAvatar';
+// import CharacteristicsPanel from './CharacteristicsPanel';
+// import SkillTreeCanvas from './SkillTreeCanvas';
 import { useDailyTasks } from '@/hooks/useDailyTasks';
 import { ArrowLeft, Star, Zap, Trophy, TrendingUp, CheckCircle, Clock, Award, Brain, Sparkles, Crown, Target, Cpu, Search, BrainCircuit, Loader2 } from 'lucide-react';
 

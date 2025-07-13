@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { X, MapPin, Tag, Briefcase, Calendar, DollarSign, Target, CheckCircle, ArrowRight, Loader2, Send, MessageCircle } from 'lucide-react';
-import { sendAilockMessage, replyAilockMessage, getAilockProfileByUser, getIntentInteractions } from '../../lib/api';
+import { sendAilockMessage, replyAilockMessage, getProfileByUserId } from '../../lib/api';
 import { useUserSession } from '@/hooks/useUserSession';
 import AilockQuickStatus from '../Ailock/AilockQuickStatus';
 import { createPortal } from 'react-dom';
 import type { AilockInteraction } from '@/types/ailock-interactions';
+import { AilockInboxService } from '@/lib/ailock/inbox-service';
 
 // We'll need to move this interface to a shared types file later
 interface IntentCard {
@@ -57,46 +58,70 @@ export default function IntentDetailModal({ isOpen, onClose, onStartWork, intent
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadData = async () => {
-      if (!intent?.id || !currentUser?.id) return;
+    const inboxService = AilockInboxService.getInstance();
+    
+    const handleInboxUpdate = (state: any) => {
+      if (intent?.id) {
+        const relevantInteractions = state.interactions.filter(
+          (i: AilockInteraction) => i.intentId === intent.id
+        );
+        setInteractions(relevantInteractions.sort((a: AilockInteraction, b: AilockInteraction) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()));
+      }
+      setIsLoadingMessages(state.isLoading);
+      setError(state.error);
+    };
 
-      setIsLoadingMessages(true);
-      setError(null);
+    if (isOpen) {
+      const unsubscribe = inboxService.subscribe(handleInboxUpdate);
+      inboxService.backgroundRefresh(); 
+      return () => unsubscribe();
+    }
+  }, [isOpen, intent?.id]);
 
+  useEffect(() => {
+    const loadProfiles = async () => {
+      if (!isOpen || !currentUser?.id) return;
       try {
-        // Fetch profiles and messages in parallel
-        const [authorProf, currentUserProf, fetchedInteractions] = await Promise.all([
-          intent.userId ? getAilockProfileByUser(intent.userId) : Promise.resolve(null),
-          getAilockProfileByUser(currentUser.id),
-          getIntentInteractions(intent.id)
+        const [authorProf, currentUserProf] = await Promise.all([
+          intent?.userId ? getProfileByUserId(intent.userId) : Promise.resolve(null),
+          getProfileByUserId(currentUser.id),
         ]);
 
         if (authorProf) {
           setAuthorProfile(authorProf);
           setAuthorAilockId(authorProf.id);
         }
-
         if (currentUserProf) {
           setCurrentUserAilockId(currentUserProf.id);
         }
-
-        setInteractions(fetchedInteractions.sort((a: AilockInteraction, b: AilockInteraction) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()));
-
       } catch (err: any) {
-        setError(err.message || 'Failed to load discussion.');
+        setError(err.message || 'Failed to load profile data.');
         console.error(err);
-      } finally {
-        setIsLoadingMessages(false);
       }
     };
-
     if (isOpen) {
-      loadData();
+        loadProfiles();
     }
-  }, [isOpen, intent, currentUser]);
+  }, [isOpen, intent?.id, intent?.userId, currentUser?.id]);
+
+  // Fallback to derive author from interactions if not available via intent.userId
+  useEffect(() => {
+    if (isOpen && !authorAilockId && interactions.length > 0 && currentUserAilockId) {
+      const candidate = interactions.find(i => i.fromAilockId !== currentUserAilockId);
+      if (candidate) {
+        setAuthorAilockId(candidate.fromAilockId);
+        // We can also set a partial profile from the interaction data
+        setAuthorProfile({ name: candidate.fromAilockName, level: candidate.fromAilockLevel });
+      }
+    }
+  }, [isOpen, interactions, authorAilockId, currentUserAilockId]);
+
 
   const handleSend = async () => {
-    const targetAilockId = replyTo ? (replyTo.fromAilockId === currentUserAilockId ? replyTo.toAilockId : replyTo.fromAilockId) : authorAilockId;
+    // Определяем получателя:
+    const targetAilockId = replyTo
+      ? (replyTo.fromAilockId === currentUserAilockId ? replyTo.toAilockId : replyTo.fromAilockId)
+      : authorAilockId || interactions.find(i => i.fromAilockId !== currentUserAilockId)?.fromAilockId;
 
     if (!targetAilockId || !message.trim()) return;
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, MapPin, Briefcase, Zap, Rss, Clock, LayoutGrid, Menu, ChevronLeft, ChevronRight, User, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useUserSession } from '../../hooks/useUserSession';
@@ -35,6 +35,8 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
   const { currentUser, isAuthenticated, isLoading: isUserLoading } = useUserSession();
   const displayUser = authUser || currentUser;
 
+  const prevUserIdRef = useRef<string | undefined>(undefined);
+
   const [activeTab, setActiveTab] = useState<Tab>('nearby');
   const [intents, setIntents] = useState<Intent[]>([]);
   const [inWorkIntents, setInWorkIntents] = useState<Intent[]>([]);
@@ -45,6 +47,15 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
   const [loadingMyIntents, setLoadingMyIntents] = useState(false);
   const [loadingInWork, setLoadingInWork] = useState(false);
   const [selectedIntent, setSelectedIntent] = useState<Intent | null>(null);
+
+  // Effect to detect реальную смену userId после начальной загрузки
+  useEffect(() => {
+    if (!displayUser?.id || displayUser.id === 'loading') return;
+    if (prevUserIdRef.current && prevUserIdRef.current !== displayUser.id) {
+      handleUserChanged();
+    }
+    prevUserIdRef.current = displayUser.id;
+  }, [displayUser?.id]);
   const [notificationCount, setNotificationCount] = useState(0);
   const [deletingIntentId, setDeletingIntentId] = useState<string | null>(null);
 

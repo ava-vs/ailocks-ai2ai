@@ -1,74 +1,61 @@
-import type { Handler } from '@netlify/functions';
-import { ailockService } from '../../src/lib/ailock/core';
+import type { Handler, HandlerEvent } from '@netlify/functions';
+import { verifyToken } from '../../src/lib/auth/auth-utils';
+import { AilockService } from '../../src/lib/ailock/core';
+import { withDbRetry } from '../../src/lib/db';
+import type { XpEventType } from '../../src/lib/ailock/shared';
 
-const headers = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-};
+const responseWithCORS = (statusCode: number, body: any) => ({
+  statusCode,
+  headers: {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  },
+  body: JSON.stringify(body),
+});
 
-const jsonHeaders = {
-  ...headers,
-  'Content-Type': 'application/json',
-};
-
-export const handler: Handler = async (event) => {
-  // Handle CORS preflight
+export const handler: Handler = async (event: HandlerEvent) => {
   if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 200,
-      headers,
-      body: ''
-    };
+    return responseWithCORS(200, {});
+  }
+  if (event.httpMethod !== 'POST') {
+    return responseWithCORS(405, { error: 'Method Not Allowed' });
   }
 
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      headers: jsonHeaders,
-      body: JSON.stringify({ error: 'Method Not Allowed' })
-    };
+  const token = event.headers.authorization?.split(' ')[1];
+  if (!token) {
+    return responseWithCORS(401, { error: 'Unauthorized' });
+  }
+
+  const payload = verifyToken(token);
+  if (!payload) {
+    return responseWithCORS(403, { error: 'Forbidden: Invalid token' });
   }
 
   try {
-    const body = event.body;
-    if (!body) {
-      return {
-        statusCode: 400,
-        headers: jsonHeaders,
-        body: JSON.stringify({ error: 'Request body is required' })
-      };
+    const { eventType, context } = JSON.parse(event.body || '{}');
+    if (!eventType) {
+      return responseWithCORS(400, { error: 'Event type is required' });
     }
 
-    const { ailockId, eventType, context = {} } = JSON.parse(body);
-    console.log('Ailock gain XP request:', { ailockId, eventType, context });
+    const ailockService = new AilockService();
+    // Wrap the database-dependent call with our retry logic
+    const result = await withDbRetry(() =>
+      ailockService.gainXp(payload.sub, eventType as XpEventType, context)
+    );
 
-    if (!ailockId || !eventType) {
-      return {
-        statusCode: 400,
-        headers: jsonHeaders,
-        body: JSON.stringify({ error: 'Ailock ID and event type are required' })
-      };
-    }
-
-    const result = await ailockService.gainXp(ailockId, eventType, context);
-    console.log('Ailock gain XP result:', result);
-
-    return {
-      statusCode: 200,
-      headers: jsonHeaders,
-      body: JSON.stringify(result)
-    };
-
-  } catch (error) {
-    console.error('Ailock gain XP error:', error);
-    return {
-      statusCode: 500,
-      headers: jsonHeaders,
-      body: JSON.stringify({
-        error: 'Failed to gain XP',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      })
-    };
+    return responseWithCORS(200, {
+      success: true,
+      message: 'XP processed successfully.',
+      data: result,
+    });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error gaining XP:', error);
+    return responseWithCORS(500, {
+      error: 'Failed to process XP event.',
+      details: errorMessage,
+    });
   }
 };

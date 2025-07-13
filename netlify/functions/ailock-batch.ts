@@ -11,6 +11,7 @@ import * as schema from '@/lib/schema';
 interface GetInboxRequest { type: 'get_inbox'; status?: 'sent' | 'read'; limit?: number; offset?: number; }
 interface MarkReadRequest { type: 'mark_read'; interactionId: string; }
 interface GetProfileRequest { type: 'get_profile'; }
+interface GetProfileByUserIdRequest { type: 'get_profile_by_user_id'; userId: string; }
 interface GetDailyTasksRequest { type: 'get_daily_tasks'; }
 interface MultipleMarkReadRequest { type: 'multiple_mark_read'; interactionIds: string[]; }
 interface SearchAilocksRequest { type: 'search_ailocks'; query: string; }
@@ -26,11 +27,14 @@ interface GetGroupIntentsRequest { type: 'get_group_intents'; groupId: string; }
 interface GetGroupDetailsRequest { type: 'get_group_details'; groupId: string; }
 interface SearchUsersForInviteRequest { type: 'search_users_for_invite'; query: string; limit?: number; }
 interface GetIntentInteractionsRequest { type: 'get_intent_interactions'; intentId: string; }
+// Добавляю новый тип запроса для batch
+interface MyIntentsWithInteractionsRequest { type: 'my_intents_with_interactions'; }
 
 type BatchRequest =
   | GetInboxRequest
   | MarkReadRequest
   | GetProfileRequest
+  | GetProfileByUserIdRequest
   | GetDailyTasksRequest
   | MultipleMarkReadRequest
   | SearchAilocksRequest
@@ -44,7 +48,8 @@ type BatchRequest =
   | GetGroupIntentsRequest
   | GetGroupDetailsRequest
   | SearchUsersForInviteRequest
-  | GetIntentInteractionsRequest;
+  | GetIntentInteractionsRequest
+  | MyIntentsWithInteractionsRequest;
 
 function responseWithCORS(statusCode: number, body: Record<string, unknown> | unknown[]): HandlerResponse {
   return {
@@ -77,7 +82,7 @@ async function getUserAilockId(event: HandlerEvent): Promise<string | null> {
 
   try {
     const ailockService = new AilockService();
-    const profile = await ailockService.getOrCreateAilock(payload.sub);
+    const profile = await withDbRetry(() => ailockService.getOrCreateAilock(payload.sub));
     return profile.id;
   } catch (error) {
     console.error('Failed to get user ailock ID:', error);
@@ -86,21 +91,21 @@ async function getUserAilockId(event: HandlerEvent): Promise<string | null> {
 }
 
 export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResponse> => {
-  // Handle CORS preflight
-  if (event.httpMethod === 'OPTIONS') {
-    return responseWithCORS(200, {});
-  }
-
-  if (event.httpMethod !== 'POST') {
-    return responseWithCORS(405, { error: 'Method not allowed' });
-  }
-
-  const userAilockId = await getUserAilockId(event);
-  if (!userAilockId) {
-    return responseWithCORS(401, { error: 'Unauthorized' });
-  }
-
   try {
+    // Handle CORS preflight
+    if (event.httpMethod === 'OPTIONS') {
+      return responseWithCORS(200, {});
+    }
+
+    if (event.httpMethod !== 'POST') {
+      return responseWithCORS(405, { error: 'Method not allowed' });
+    }
+
+    const userAilockId = await getUserAilockId(event);
+    if (!userAilockId) {
+      return responseWithCORS(401, { error: 'Unauthorized' });
+    }
+
     const body: { requests?: BatchRequest[] } = JSON.parse(event.body || '{}');
     const { requests = [] } = body;
 
@@ -160,6 +165,16 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
               return {
                 type: 'get_profile',
                 data: profile
+              };
+
+            case 'get_profile_by_user_id':
+              if (req.type !== 'get_profile_by_user_id' || !req.userId) {
+                throw new Error('Missing userId for get_profile_by_user_id operation');
+              }
+              const userProfile = await ailockService.getOrCreateAilock(req.userId);
+              return {
+                type: 'get_profile_by_user_id',
+                data: userProfile
               };
 
             case 'get_daily_tasks':
@@ -360,6 +375,29 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
               const result = await handleGetIntentInteractions(intentId, userAilockId);
               return { type: 'get_intent_interactions', data: result };
 
+            // Новый тип запроса: мои интенты + сообщения к ним
+            case 'my_intents_with_interactions': {
+              // Получаем все интенты пользователя
+              const myIntents = await withDbRetry(() => db.query.intents.findMany({
+                where: eq(schema.intents.userId, userAilockId),
+                orderBy: [desc(schema.intents.createdAt)],
+              }));
+              // Для каждого интента — сообщения
+              const intentInteractions = await Promise.all(
+                myIntents.map(async (intent) => {
+                  const interactions = await withDbRetry(() => db.query.ailockInteractions.findMany({
+                    where: eq(schema.ailockInteractions.intentId, intent.id),
+                    orderBy: [asc(schema.ailockInteractions.createdAt)],
+                  }));
+                  return { intent, interactions };
+                })
+              );
+              return {
+                type: 'my_intents_with_interactions',
+                data: intentInteractions
+              };
+            }
+
             default:
               // This should be unreachable if BatchRequest is a comprehensive discriminated union
               const exhaustiveCheck: never = req;
@@ -409,7 +447,7 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
 
   } catch (error) {
     console.error('Batch operation failed:', error);
-    return responseWithCORS(500, { 
+    return responseWithCORS(500, {
       error: 'Batch operation failed',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
@@ -441,7 +479,7 @@ async function handleGetIntentInteractions(intentId: string, currentAilockId: st
         where: eq(schema.ailocks.id, currentAilockId)
       });
       if (!ailock) throw new Error('Ailock not found');
-      const currentUserId = ailock.userId;
+      const currentUserId = ailock.userId; // keep for group membership checks
 
       const groupIntent = await db.query.groupIntents.findFirst({
         where: eq(schema.groupIntents.intentId, intentId),
@@ -465,8 +503,8 @@ async function handleGetIntentInteractions(intentId: string, currentAilockId: st
         and(
           isNotNull(schema.ailockInteractions.toAilockId),
           or(
-            eq(schema.ailockInteractions.fromAilockId, currentUserId),
-            eq(schema.ailockInteractions.toAilockId, currentUserId)
+            eq(schema.ailockInteractions.fromAilockId, currentAilockId),
+            eq(schema.ailockInteractions.toAilockId, currentAilockId)
           )
         )
       );

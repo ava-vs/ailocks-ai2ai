@@ -1,6 +1,7 @@
 import { atom } from 'nanostores';
 import { useStore } from '@nanostores/react';
 import { useCallback } from 'react';
+import { getAilockProfile } from '../lib/api'; // добавить импорт
 
 interface AuthUser {
   id: string;
@@ -45,17 +46,20 @@ async function fetchJson(url: string, options: RequestInit = {}) {
 }
 
 async function bootstrapAuth() {
+  // Check the recentlyLoggedOut flag
+  if (typeof window !== 'undefined' && localStorage.getItem('recentlyLoggedOut') === 'true') {
+    // Clear the flag and do not perform automatic authorization
+    localStorage.removeItem('recentlyLoggedOut');
+    authAtom.set({ user: null, loading: false, error: null });
+    return;
+  }
+  
   try {
     const data = await fetchJson('/.netlify/functions/auth-me');
     authAtom.set({ user: data, loading: false, error: null });
   } catch {
     authAtom.set({ user: null, loading: false, error: null });
   }
-}
-
-// Call bootstrap once when module loads (client side)
-if (typeof window !== 'undefined') {
-  bootstrapAuth();
 }
 
 export function useAuth() {
@@ -70,7 +74,14 @@ export function useAuth() {
         body: JSON.stringify({ email, password })
       });
       console.log('useAuth: login success', data);
+      // Store userId in localStorage for legacy helpers that still rely on it
+      if (typeof window !== 'undefined' && data?.id) {
+        localStorage.setItem('userId', data.id);
+      }
       authAtom.set({ user: data, loading: false, error: null });
+      if (typeof window !== 'undefined') {
+        getAilockProfile(true); // force refresh
+      }
     } catch (err: any) {
       console.error('useAuth: login error', err);
       authAtom.set({ user: null, loading: false, error: err.message });
@@ -98,11 +109,27 @@ export function useAuth() {
   const logout = useCallback(async () => {
     authAtom.set({ ...authAtom.get(), loading: true });
     try {
-      await fetch('/.netlify/functions/auth-logout', { method: 'POST', credentials: 'include' });
+      const response = await fetch('/.netlify/functions/auth-logout', { 
+        method: 'POST', 
+        credentials: 'include' 
+      });
+      
+      if (response.ok) {
+        // Set the recentlyLoggedOut flag
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('recentlyLoggedOut', 'true');
+          localStorage.removeItem('userId');
+        }
+      }
     } finally {
       authAtom.set({ user: null, loading: false, error: null });
+      
+      if (typeof window !== 'undefined') {
+        // Redirect to the home page
+        window.location.replace('/');
+      }
     }
   }, []);
 
   return { user, loading, error, login, signup, logout };
-} 
+}

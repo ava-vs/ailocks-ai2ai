@@ -1,6 +1,8 @@
 // AICODE-NOTE: Central API configuration point
 // All serverless function calls are routed through this base path
 import type { AilockInteraction } from '@/types/ailock-interactions';
+import { ailockStore, setAilockProfile, setAilockLoading, setAilockError } from './store';
+import type { FullAilockProfile } from './store';
 
 const API_BASE = '/.netlify/functions';
 
@@ -100,19 +102,25 @@ export const deleteIntent = async (intentId: string, userId: string) => {
   }
 };
 
-export const getAilockProfile = async () => {
+export const getAilockProfile = async (forceRefresh = false): Promise<FullAilockProfile | null> => {
   try {
-    const userId = localStorage.getItem('userId');
-    if (!userId) {
-      throw new Error('User not authenticated');
-    }
-    
-    const response = await fetch(`${API_BASE}/ailock-profile?userId=${userId}`);
-    if (!response.ok) throw new Error('Failed to fetch Ailock profile');
-    return await response.json();
-  } catch (error) {
-    console.error('Get Ailock profile error:', error);
-    throw error;
+    const res = await fetch('/.netlify/functions/ailock-batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ requests: [{ type: 'get_profile' }] })
+    });
+    if (!res.ok) throw new Error('Failed to fetch Ailock profile');
+    const data = await res.json();
+    // Корректно парсим batch-ответ
+    const profileResult = Array.isArray(data.results)
+      ? data.results.find((r: any) => r.type === 'get_profile' && r.success)
+      : null;
+    const profile = profileResult?.data || null;
+    return profile;
+  } catch (err) {
+    console.error('Get Ailock profile error:', err);
+    return null;
   }
 };
 
@@ -141,18 +149,43 @@ export const gainAilockXp = async (eventType: string, context: Record<string, an
   }
 };
 
-// === AI2AI Interaction helpers ===
-export const getAilockProfileByUser = async (userId: string) => {
+export const getProfileByUserId = async (userId: string): Promise<FullAilockProfile | null> => {
+  if (!userId) {
+    console.error('User ID is required to fetch a profile.');
+    return null;
+  }
+
   try {
-    const response = await fetch(`${API_BASE}/ailock-profile?userId=${userId}`);
-    if (!response.ok) throw new Error('Failed to fetch Ailock profile');
-    const data = await response.json();
-    return data.profile;
+    const res = await fetch(`${API_BASE}/ailock-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        requests: [{ type: 'get_profile_by_user_id', userId }]
+      })
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`Batch request failed: ${errorText}`);
+    }
+
+    const json = await res.json();
+    const result = json.results?.[0];
+
+    if (!result || !result.success) {
+      throw new Error(result?.error || 'Failed to get profile by user ID from batch response');
+    }
+
+    return result.data as FullAilockProfile;
+
   } catch (error) {
-    console.error('Get other Ailock profile error:', error);
-    throw error;
+    console.error('Get profile by user ID error:', error);
+    return null;
   }
 };
+
+// === AI2AI Interaction helpers ===
 
 export const sendAilockMessage = async ({
   toAilockId,

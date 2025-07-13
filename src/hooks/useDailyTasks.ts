@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import type { UserTask } from '../lib/ailock/shared';
 import { useAuth } from './useAuth';
+import { useStore } from '@nanostores/react';
+import { ailockStore } from '../lib/store';
 
 export function useDailyTasks() {
   const { user, loading: authLoading } = useAuth();
@@ -79,17 +81,21 @@ export function useDailyTasks() {
     prevTasksRef.current = tasks;
   }, [tasks, loading]);
 
-  // Listen for global events that might require a task refresh
+  const { profile } = useStore(ailockStore);
+
+  useEffect(() => {
+    // Refetch tasks when the profile changes, as tasks might be level-dependent.
+    if (profile) {
+      fetchTasks();
+    }
+  }, [profile, fetchTasks]);
+
   useEffect(() => {
     window.addEventListener('task-completed', fetchTasks);
-    window.addEventListener('ailock-profile-updated', fetchTasks);
-
     return () => {
       window.removeEventListener('task-completed', fetchTasks);
-      window.removeEventListener('ailock-profile-updated', fetchTasks);
     };
   }, [fetchTasks]);
 
-
   return { tasks, loading, error, refetchTasks: fetchTasks };
-} 
+}

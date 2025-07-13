@@ -1,7 +1,7 @@
 import { useStore } from '@nanostores/react';
 import { ailockStore, setAilockProfile, setAilockLoading, setAilockError } from '../lib/store';
 import type { FullAilockProfile } from '../lib/store';
-import { getProfile as fetchProfile, gainXp as gainXpApi } from '../lib/ailock/api';
+import { getAilockProfile, gainAilockXp } from '../lib/api';
 import { useCallback, useEffect } from 'react';
 import { useUserSession } from './useUserSession';
 import toast from 'react-hot-toast';
@@ -12,23 +12,10 @@ export function useAilock() {
   const { currentUser, isAuthenticated } = useUserSession();
 
   const loadProfile = useCallback(async () => {
-    if (!isAuthenticated || !currentUser?.id || currentUser.id === 'loading' || profile) {
-      return;
+    if (isAuthenticated && !profile) {
+      getAilockProfile();
     }
-
-    setAilockLoading(true);
-    try {
-      const fetchedProfile = await fetchProfile(currentUser.id);
-      setAilockProfile(fetchedProfile);
-    } catch (err: any) {
-      console.error("Failed to load Ailock profile via hook", err);
-      const errorMessage = err.message || 'Could not load Ailock profile.';
-      setAilockError(errorMessage);
-      toast.error(errorMessage);
-    } finally {
-      setAilockLoading(false);
-    }
-  }, [isAuthenticated, currentUser?.id, profile]);
+  }, [isAuthenticated, profile]);
 
   useEffect(() => {
     if (isAuthenticated && !profile && !isLoading) {
@@ -42,41 +29,14 @@ export function useAilock() {
       return null;
     }
 
-    try {
-      const result = await gainXpApi(profile.id, eventType, context);
-      if (result.success) {
-        toast.success(`+${result.xpGained} XP`, { duration: 1500, icon: '✨' });
-        
-        const updatedProfile = {
-            ...profile,
-            xp: result.newXp,
-            level: result.newLevel,
-            skillPoints: result.newSkillPoints || (profile.skillPoints + (result.skillPointsGained || 0))
-        };
+    const result = await gainAilockXp(eventType, context);
 
-        setAilockProfile(updatedProfile as FullAilockProfile);
-
-        if (result.leveledUp) {
-          console.log(`🎉 Ailock leveled up to level ${result.newLevel}!`);
-          
-          window.dispatchEvent(new CustomEvent('ailock-level-up', { 
-            detail: { 
-              newLevel: result.newLevel,
-              skillPointsGained: result.skillPointsGained || 1,
-              xpGained: result.xpGained,
-              eventType
-            } 
-          }));
-        }
-
-        window.dispatchEvent(new CustomEvent('ailock-profile-updated', { detail: updatedProfile }));
-        return result;
-      }
-    } catch (err) {
-      console.error("Failed to gain XP via hook", err);
-      toast.error("Failed to record XP gain.");
+    if (result) {
+      toast.success(`+${result.xpGained} XP`, { duration: 1500, icon: '✨' });
+      getAilockProfile(true); // Force refresh
     }
-    return null;
+
+    return result;
   }, [profile]);
 
   return {

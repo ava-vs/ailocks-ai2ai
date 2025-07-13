@@ -55,7 +55,12 @@ export function setAuthCookie(token: string): string {
 }
 
 export function clearAuthCookie(): string {
-  return serialize('auth_token', '', { ...cookieOptions, maxAge: 0 });
+  // Setting both maxAge=0 and an expired date maximises cross-browser reliability when clearing cookies
+  return serialize('auth_token', '', {
+    ...cookieOptions,
+    maxAge: 0,
+    expires: new Date(0)
+  });
 }
 
 // AICODE-ASK: Should we implement additional validation for the auth token structure before returning it?
