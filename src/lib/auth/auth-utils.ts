@@ -43,11 +43,13 @@ export function verifyToken(token: string): JwtPayload | null {
 // These settings are critical for security - httpOnly prevents JavaScript access to cookies,
 // secure ensures HTTPS-only in production, and sameSite prevents CSRF attacks
 // AICODE-TODO: Consider adding rotation mechanism for auth tokens to enhance security
-const cookieOptions = {
+const isProduction = process.env.NODE_ENV === 'production';
+
+export const cookieOptions: import('cookie').CookieSerializeOptions = {
   httpOnly: true,
-  sameSite: 'lax' as const,
+  sameSite: isProduction ? 'none' : 'lax',
   path: '/',
-  secure: process.env.NODE_ENV === 'production'
+  secure: isProduction,
 };
 
 export function setAuthCookie(token: string): string {
@@ -66,10 +68,20 @@ export function clearAuthCookie(): string {
 // AICODE-ASK: Should we implement additional validation for the auth token structure before returning it?
 // Current implementation only checks for existence but not format validity
 export function getAuthTokenFromHeaders(headers: Record<string, string | string[] | undefined>): string | null {
+  // Сначала проверяем заголовок Authorization
+  const authHeader = headers.authorization as string | undefined;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.split(' ')[1];
+  }
+
+  // Затем проверяем cookie, если заголовок Authorization не содержит токен
   const cookieHeader = headers.cookie as string | undefined;
-  if (!cookieHeader) return null;
-  const cookies = parse(cookieHeader);
-  return cookies['auth_token'] || null;
+  if (cookieHeader) {
+    const cookies = parse(cookieHeader);
+    return cookies['auth_token'] || null;
+  }
+
+  return null;
   
   // AICODE-NOTE: This function is used by Netlify Functions to extract the auth token from incoming requests.
   // It's the primary method by which serverless functions authenticate users, so any changes here

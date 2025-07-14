@@ -107,7 +107,8 @@ export const handler: Handler = async (event) => {
         email: user.email,
         name: user.name,
         country: user.country,
-        city: user.city
+        city: user.city,
+        token
       })
     };
   } catch (error) {
@@ -118,4 +119,4 @@ export const handler: Handler = async (event) => {
       body: JSON.stringify({ error: 'Internal server error' })
     };
   }
-}; 
+};

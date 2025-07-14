@@ -1,4 +1,5 @@
 import type { AilockInteraction } from '@/types/ailock-interactions';
+import { buildHeaders } from '../api';
 
 export interface InboxState {
   interactions: AilockInteraction[];
@@ -88,9 +89,7 @@ export class AilockInboxService {
     const response = await fetch('/.netlify/functions/ailock-batch', {
       method: 'POST',
       credentials: 'include', // Используем HTTP-only куки
-      headers: { 
-        'Content-Type': 'application/json'
-      },
+      headers: buildHeaders(),
       body: JSON.stringify({
         requests: [
           {
@@ -127,9 +126,7 @@ export class AilockInboxService {
   private async fetchInboxDataLegacy(): Promise<InboxResponse> {
     const response = await fetch('/.netlify/functions/ailock-interaction?limit=50', {
       credentials: 'include', // Используем HTTP-only куки
-      headers: { 
-        'Content-Type': 'application/json'
-      }
+      headers: buildHeaders()
     });
 
     if (!response.ok) {

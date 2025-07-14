@@ -33,7 +33,9 @@ export default function QueryHistoryPage() {
     
     setLoading(true);
     try {
-      const response = await fetch(`/.netlify/functions/chat-history?userId=${currentUser.id}`);
+      const response = await fetch(`/.netlify/functions/chat-history?userId=${currentUser.id}`, {
+        credentials: 'include'
+      });
       if (response.ok) {
         const data = await response.json();
         setSessions(data.sessions || []);

@@ -179,6 +179,7 @@ export default function ChatInterface() {
         const response = await fetch('/.netlify/functions/session-create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ 
             mode, 
             language, 
@@ -223,7 +224,9 @@ export default function ChatInterface() {
 
       try {
         console.log('📥 Loading chat history in background for session:', sessionId);
-        const response = await fetch(`/.netlify/functions/chat-history?sessionId=${sessionId}`);
+        const response = await fetch(`/.netlify/functions/chat-history?sessionId=${sessionId}`, {
+          credentials: 'include'
+        });
         
         if (response.ok) {
           const data = await response.json();
@@ -260,6 +263,7 @@ export default function ChatInterface() {
         const response = await fetch('/.netlify/functions/session-create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ 
             mode, 
             language, 
@@ -317,6 +321,7 @@ export default function ChatInterface() {
       const response = fetch('/.netlify/functions/chat-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           message: userMessage.content,
           sessionId: sessionId || `temp-${Date.now()}`,
@@ -509,6 +514,7 @@ export default function ChatInterface() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           userInput: message,
           sessionId: sessionId,
@@ -573,6 +579,7 @@ export default function ChatInterface() {
       const response = await fetch('/.netlify/functions/intents-create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           sessionId,
           userInput: messageToUse,
@@ -850,6 +857,7 @@ export default function ChatInterface() {
           fetch('/.netlify/functions/save-message', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ sessionId, message: newMessage })
           }).catch(err => {
             console.warn('Failed to persist voice message:', err);

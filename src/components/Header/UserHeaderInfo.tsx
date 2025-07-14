@@ -3,7 +3,25 @@ import { useLocation } from '@/hooks/useLocation';
 import { Gem, Users, ChevronDown, User, LogOut } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
+// Хелпер для предотвращения hydration mismatch
+function ClientOnly({ children }: { children: React.ReactNode }) {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  return isClient ? <>{children}</> : <div className="h-8 w-24 md:w-64 bg-white/5 animate-pulse rounded-lg"></div>;
+}
+
 export default function UserHeaderInfo() {
+  // Обернем логику состояния в ClientOnly для предотвращения hydration mismatch
+  return <ClientOnly>
+    <UserHeaderContent />
+  </ClientOnly>;
+}
+
+function UserHeaderContent() {
   const { currentUser, isAuthenticated, isLoading, logout } = useUserSession();
   const location = useLocation();
   const [showUserMenu, setShowUserMenu] = useState(false);

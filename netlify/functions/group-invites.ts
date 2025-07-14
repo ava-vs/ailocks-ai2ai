@@ -33,7 +33,7 @@ async function handlePost(event: HandlerEvent, payload: any) {
   }
 
   const targetAilock = await withDbRetry(() =>
-    ailockService.getOrCreateAilock(userId)
+    ailockService.getFullAilockProfileByUserId(userId)
   );
 
   const newMember = await withDbRetry(() =>

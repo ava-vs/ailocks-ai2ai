@@ -31,6 +31,7 @@ export const handler: Handler = async (event) => {
     console.log('Auth me: received request');
     
     const token = getAuthTokenFromHeaders(event.headers);
+
     if (!token) {
       return {
         statusCode: 401,

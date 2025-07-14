@@ -64,8 +64,16 @@ export default function useNotifications() {
     if (!displayUser?.id) return;
     setLoading(true);
     try {
+      // Получаем токен из localStorage для авторизации
+      const token = localStorage.getItem('auth_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const response = await fetch(NOTIFICATIONS_API, {
-        headers: { 'Content-Type': 'application/json' }
+        headers,
+        credentials: 'include' // Для передачи cookie
       });
       if (response.ok) {
         const data = await response.json();
@@ -82,8 +90,16 @@ export default function useNotifications() {
   const fetchUnreadCounts = useCallback(async () => {
     if (!displayUser?.id) return;
     try {
+      // Получаем токен из localStorage для авторизации
+      const token = localStorage.getItem('auth_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const response = await fetch(`${NOTIFICATIONS_API}?counts=true`, {
-        headers: { 'Content-Type': 'application/json' }
+        headers,
+        credentials: 'include' // Для передачи cookie
       });
       if (response.ok) {
         const data = await response.json();
@@ -97,11 +113,18 @@ export default function useNotifications() {
     if (!displayUser?.id || !isPolling.current) return;
     abortController.current = new AbortController();
     try {
+      // Получаем токен из localStorage для авторизации
+      const token = localStorage.getItem('auth_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const response = await fetch(LONGPOLL_API, {
+        headers,
         method: 'GET',
         signal: abortController.current.signal,
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' }
+        credentials: 'include' // Для передачи cookie
       });
       if (response.status === 200) {
         const data: Notification[] = await response.json();
@@ -135,6 +158,7 @@ export default function useNotifications() {
       const response = await fetch(NOTIFICATIONS_API, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ notification_id: notificationId })
       });
       if (response.ok) {
@@ -151,6 +175,7 @@ export default function useNotifications() {
       const response = await fetch(NOTIFICATIONS_API, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ action: 'mark_all_read' })
       });
       if (response.ok) {
@@ -167,6 +192,7 @@ export default function useNotifications() {
       const response = await fetch(NOTIFICATIONS_API, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ action: 'mark_group_read', group_id: groupId, type })
       });
       if (response.ok) {
@@ -192,6 +218,7 @@ export default function useNotifications() {
       const response = await fetch(NOTIFICATIONS_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ type, title, message, group_id: groupId, target_user_id: targetUserId })
       });
       if (response.ok) {

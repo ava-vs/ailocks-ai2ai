@@ -24,8 +24,66 @@ export function calculateTotalXpForLevel(level: number): number {
 
 export class AilockService {
   
+  /**
+   * Возвращает полный профиль Ailock по userId пользователя, включая навыки и достижения
+   */
+  async getFullAilockProfileByUserId(userId: string): Promise<FullAilockProfile> {
+    // Находим базовый профиль по userId
+    const baseProfile = await this.getAilockProfileByUserId(userId);
+    
+    // Добавляем дополнительные данные к профилю
+    const [skills, achievements, recentXpHistory] = await Promise.all([
+      this.getSkills(baseProfile.id),
+      this.getAchievements(baseProfile.id),
+      this.getRecentXpHistory(baseProfile.id, 10)
+    ]);
+    
+    return this.buildFullProfile(baseProfile, skills, achievements, recentXpHistory);
+  }
+  
+  /**
+   * Возвращает полный профиль Ailock по его ID, включая навыки и достижения
+   */
+  async getFullAilockProfileById(ailockId: string): Promise<FullAilockProfile> {
+    // Находим базовый профиль по ID
+    const baseProfile = await this.getAilockProfileById(ailockId);
+    
+    // Добавляем дополнительные данные к профилю
+    const [skills, achievements, recentXpHistory] = await Promise.all([
+      this.getSkills(baseProfile.id),
+      this.getAchievements(baseProfile.id),
+      this.getRecentXpHistory(baseProfile.id, 10)
+    ]);
+    
+    return this.buildFullProfile(baseProfile, skills, achievements, recentXpHistory);
+  }
+  
+  /**
+   * Вспомогательная функция для построения полного профиля из базового профиля и дополнительных данных
+   */
+  private buildFullProfile(baseProfile: AilockProfile, skills: AilockSkill[], achievements: AilockAchievement[], recentXpHistory: XpEvent[]): FullAilockProfile {
+    // Подсчет общего числа взаимодействий
+    const totalInteractions = recentXpHistory.filter(x => 
+      x.eventType === 'sent_message' || x.eventType === 'received_message' || 
+      x.eventType === 'responded_to_message'
+    ).length;
+    
+    return {
+      ...baseProfile,
+      skills,
+      achievements,
+      recentXpHistory,
+      totalInteractions
+    };
+  }
+  
+  /**
+   * Находит профиль Ailock по userId
+   * @deprecated Используйте getFullAilockProfileByUserId вместо этого метода
+   */
   async getOrCreateAilock(userId: string): Promise<FullAilockProfile> {
-    const baseProfile = await this.findOrCreateBaseProfile(userId);
+    // Находим профиль по userId
+    const baseProfile = await this.getAilockProfileByUserId(userId);
     
     const [skills, achievements, recentXpHistory] = await Promise.all([
       this.getSkills(baseProfile.id),
@@ -69,13 +127,16 @@ export class AilockService {
     };
   }
 
-  private async findOrCreateBaseProfile(userId: string): Promise<AilockProfile> {
+  /**
+   * Находит профиль Ailock по userId пользователя
+   */
+  async getAilockProfileByUserId(userId: string): Promise<AilockProfile> {
     if (!db) {
       console.error('Database client (db) is not initialized in ailockService.');
       throw new Error('Database connection is not available.');
     }
 
-    console.log(`[AilockService] Attempting to find profile for userId: ${userId} using Drizzle ORM.`);
+    console.log(`[AilockService] Attempting to find ailock profile by userId: ${userId} using Drizzle ORM.`);
     
     try {
       // Get existing profiles with retry
@@ -92,7 +153,7 @@ export class AilockService {
           break;
         } catch (dbError) {
           attempt++;
-          console.log(`Ailock findOrCreateBaseProfile: DB attempt ${attempt} failed`, dbError);
+          console.log(`Ailock getAilockProfileByUserId: DB attempt ${attempt} failed`, dbError);
           
           if (attempt >= maxAttempts) {
             throw dbError;
@@ -105,58 +166,66 @@ export class AilockService {
       }
 
       if (existingProfiles.length > 0) {
-        console.log(`[AilockService] Found existing profile for userId: ${userId}`);
+        console.log(`[AilockService] Found existing ailock profile with userId: ${userId}, ailockId: ${existingProfiles[0].id}`);
         return this.mapToAilockProfile(existingProfiles[0]);
       } else {
-        console.log(`[AilockService] No profile found for userId: ${userId}. Creating a new one.`);
-        const newProfileData = {
-          userId,
-          name: 'Ailock',
-          level: 1,
-          xp: 0,
-          skillPoints: 1,
-          avatarPreset: 'default',
-          characteristics: {
-            velocity: 50,
-            insight: 50,
-            efficiency: 50,
-            economy: 50,
-            convenience: 50
-          }
-        };
-
-        // Insert new profile with retry
-        let newAilocks: any[] = [];
-        attempt = 0;
-        
-        while (attempt < maxAttempts) {
-          try {
-            newAilocks = await db.insert(ailocks).values(newProfileData).returning();
-            break;
-          } catch (dbError) {
-            attempt++;
-            console.log(`Ailock findOrCreateBaseProfile: Insert attempt ${attempt} failed`, dbError);
-            
-            if (attempt >= maxAttempts) {
-              throw dbError;
-            }
-            
-            const { refreshDbConnection } = await import('../db');
-            refreshDbConnection();
-            await new Promise(resolve => setTimeout(resolve, 200));
-          }
-        }
-
-        if (newAilocks.length === 0) {
-          throw new Error('Failed to create a new Ailock profile.');
-        }
-
-        console.log(`[AilockService] New profile created successfully for userId: ${userId}`);
-        return this.mapToAilockProfile(newAilocks[0]);
+        console.log(`[AilockService] No ailock profile found for userId: ${userId}.`);
+        throw new Error(`Ailock profile not found for user ${userId}. Please contact support.`);
       }
     } catch (error) {
-      console.error(`[AilockService] Error in findOrCreateBaseProfile for userId ${userId}:`, error);
-      throw new Error('A database error occurred while fetching or creating the profile.');
+      console.error(`[AilockService] Error in getAilockProfileByUserId for userId ${userId}:`, error);
+      throw new Error('A database error occurred while fetching the profile.');
+    }
+  }
+
+  /**
+   * Returns existing ailock profile by its ID
+   */
+  async getAilockProfileById(ailockId: string): Promise<AilockProfile> {
+    if (!db) {
+      console.error('Database client (db) is not initialized in ailockService.');
+      throw new Error('Database connection is not available.');
+    }
+
+    console.log(`[AilockService] Attempting to find ailock profile by ID: ${ailockId} using Drizzle ORM.`);
+    
+    try {
+      // Get existing profiles with retry
+      let existingProfiles: any[] = [];
+      let attempt = 0;
+      const maxAttempts = 2;
+      
+      while (attempt < maxAttempts) {
+        try {
+          existingProfiles = await db.select()
+            .from(ailocks)
+            .where(eq(ailocks.id, ailockId))
+            .limit(1);
+          break;
+        } catch (dbError) {
+          attempt++;
+          console.log(`Ailock getBaseProfile: DB attempt ${attempt} failed`, dbError);
+          
+          if (attempt >= maxAttempts) {
+            throw dbError;
+          }
+          
+          const { refreshDbConnection } = await import('../db');
+          refreshDbConnection();
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
+
+      if (existingProfiles.length > 0) {
+        console.log(`[AilockService] Found existing ailock profile with ID: ${ailockId}`);
+        return this.mapToAilockProfile(existingProfiles[0]);
+      } else {
+        console.log(`[AilockService] No ailock profile found with ID: ${ailockId}.`);
+        throw new Error(`Ailock profile not found with ID ${ailockId}. Please contact support.`);
+      }
+    } catch (error) {
+      console.error(`[AilockService] Error in getAilockProfileById for ID ${ailockId}:`, error);
+      throw new Error('A database error occurred while fetching the profile.');
     }
   }
 
@@ -496,7 +565,7 @@ export class AilockService {
   }
 
   private async _assignTasksForUser(userId: string, today: string) {
-    const ailockProfile = await this.getOrCreateAilock(userId);
+    const ailockProfile = await this.getFullAilockProfileByUserId(userId);
 
     // 1. Assign onboarding tasks if needed
     const completedOnboardingTasks = await db.select({ taskId: userTasks.taskId })

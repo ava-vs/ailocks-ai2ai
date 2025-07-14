@@ -241,7 +241,9 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
     }
 
     try {
-      const response = await fetch(`/.netlify/functions/intents-list?userId=${displayUser.id}&myIntents=true`);
+      const response = await fetch(`/.netlify/functions/intents-list?userId=${displayUser.id}&myIntents=true`, {
+        credentials: 'include'
+      });
       if (response.ok) {
         const res = await response.json();
         // API returns { intents: [...] }
@@ -290,7 +292,9 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
     }
 
     try {
-      const response = await fetch(`/.netlify/functions/intents-list?q=${encodeURIComponent(query)}`);
+      const response = await fetch(`/.netlify/functions/intents-list?q=${encodeURIComponent(query)}`, {
+        credentials: 'include'
+      });
       if (response.ok) {
         const data = await response.json();
         setIntents(data);

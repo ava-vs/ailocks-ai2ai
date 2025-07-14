@@ -35,7 +35,7 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
     }
 
     // Fetch the user's Ailock profile for additional context
-    const ailockProfile = session.userId ? await ailockService.getOrCreateAilock(session.userId) : null;
+    const ailockProfile = session.userId ? await ailockService.getFullAilockProfileByUserId(session.userId) : null;
 
     // Fetch or create chat summary for additional context
     const chatSummary = session.userId ? await chatService.getOrCreateSummary(session.userId) : '';

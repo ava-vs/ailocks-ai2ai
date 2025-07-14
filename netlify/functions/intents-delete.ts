@@ -58,7 +58,7 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
 
     // --- Ailock XP Deduction ---
     try {
-      const ailockProfile = await ailockService.getOrCreateAilock(userId);
+      const ailockProfile = await ailockService.getFullAilockProfileByUserId(userId);
       if (ailockProfile) {
         const xpResult = await ailockService.gainXp(ailockProfile.id, 'intent_deleted', { intentId: deletedIntent[0].id });
         console.log(`XP deducted for intent deletion: ${xpResult.xpGained}`);

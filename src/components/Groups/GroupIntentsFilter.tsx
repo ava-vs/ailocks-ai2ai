@@ -49,6 +49,7 @@ function useGroupIntents(groupId: string | null) {
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({
           requests: [
             {

@@ -8,7 +8,31 @@ import { AilockInboxService, type InboxState } from '@/lib/ailock/inbox-service'
 import AilockQuickStatus from './AilockQuickStatus';
 import AilockInboxWidget from './AilockInboxWidget';
 
+// Компонент для предотвращения hydration mismatch
+function ClientOnly({ children, fallback }: { children: React.ReactNode, fallback?: React.ReactNode }) {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  return isClient ? <>{children}</> : (fallback || (
+    <div className="hidden md:flex items-center space-x-3">
+      <div className="w-10 h-10 bg-white/5 rounded-lg animate-pulse" />
+      <div className="w-32 h-6 bg-white/5 rounded animate-pulse" />
+    </div>
+  ));
+}
+
 export default function AilockHeaderWidget() {
+  return (
+    <ClientOnly>
+      <AilockHeaderWidgetContent />
+    </ClientOnly>
+  );
+}
+
+function AilockHeaderWidgetContent() {
   const { currentUser } = useUserSession();
   const { user: authUser } = useAuth();
   const { profile, isLoading: loading } = useAilock();

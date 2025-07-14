@@ -36,10 +36,10 @@ export class AilockTemplateService {
   ): Promise<string> {
     
     try {
-      // Получаем профили отправителя и получателя
+      // Получаем полные профили отправителя и получателя (включая навыки и достижения)
       const [fromProfile, toProfile] = await Promise.all([
-        ailockService.getOrCreateAilock(fromAilockId),
-        ailockService.getOrCreateAilock(toAilockId)
+        ailockService.getFullAilockProfileById(fromAilockId),
+        ailockService.getFullAilockProfileById(toAilockId)
       ]);
 
       const prompt = `

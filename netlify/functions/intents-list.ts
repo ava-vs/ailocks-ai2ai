@@ -1,5 +1,5 @@
 import type { Handler } from '@netlify/functions';
-import { db } from '../../src/lib/db';
+import { db, withDbRetry } from '../../src/lib/db';
 import { intents, users } from '../../src/lib/schema';
 import { eq, and, or, isNull, sql, desc } from 'drizzle-orm';
 import { embeddingService } from '../../src/lib/embedding-service';
@@ -83,11 +83,13 @@ export const handler: Handler = async (event) => {
          )
        );
       
-      const keywordResults = await db
-        .select()
-        .from(intents)
-        .where(or(...searchConditions))
-        .limit(limit);
+      const keywordResults = await withDbRetry(
+        async () => db
+          .select()
+          .from(intents)
+          .where(or(...searchConditions))
+          .limit(limit)
+      );
 
       for (const intent of keywordResults) {
         if (!intentIds.has(intent.id)) {
@@ -99,11 +101,13 @@ export const handler: Handler = async (event) => {
       // 3. Enrich and format combined results
       const enrichedResults = await Promise.all(
         allIntents.map(async (intent: any) => {
-          const [user] = await db
-            .select({ name: users.name, email: users.email })
-            .from(users)
-            .where(eq(users.id, intent.userId))
-            .limit(1);
+          const [user] = await withDbRetry(
+            async () => db
+              .select({ name: users.name, email: users.email })
+              .from(users)
+              .where(eq(users.id, intent.userId))
+              .limit(1)
+          );
 
           return {
             id: intent.id,
@@ -221,7 +225,9 @@ export const handler: Handler = async (event) => {
       .orderBy(desc(locationScore), desc(intents.createdAt))
       .limit(limit);
 
-    const results = await query;
+    const results = await withDbRetry(
+      async () => query
+    );
 
     // Calculate additional metrics for each intent
     const enrichedResults = results.map(intent => {

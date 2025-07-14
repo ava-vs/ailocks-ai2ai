@@ -63,7 +63,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
   try {
     const ailockService = new AilockService();
     // Wrap the database-dependent call with our retry logic
-    const profile = await withDbRetry(() => ailockService.getOrCreateAilock(userId as string));
+    const profile = await withDbRetry(() => ailockService.getAilockProfileByUserId(userId as string));
     
     if (!profile) {
       return responseWithCORS(404, { error: 'Ailock profile not found' });
@@ -76,7 +76,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
        // delete (profileData as any).privateField;
     }
 
-    return responseWithCORS(200, profileData);
+    return responseWithCORS(200, { profile: profileData });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     console.error(`Ailock profile error for userId ${userId}:`, error);

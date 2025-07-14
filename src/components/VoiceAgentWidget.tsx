@@ -10,7 +10,9 @@ import { useAuth } from '../hooks/useAuth';
 const AGENT_ID = import.meta.env.PUBLIC_AGENT_ID || import.meta.env.AGENT_ID;
 
 const getSignedUrl = async (): Promise<string> => {
-  const response = await fetch('/.netlify/functions/get-elevenlabs-signed-url');
+  const response = await fetch('/.netlify/functions/get-elevenlabs-signed-url', {
+    credentials: 'include'
+  });
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(errorData.error || 'Failed to get signed URL');
@@ -105,6 +107,7 @@ export default function VoiceAgentWidget() {
           const response = await fetch('/.netlify/functions/intents-create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({
               userId,
               // Flatten the incoming payload – ElevenLabs forwards all arguments under intentData
@@ -159,7 +162,9 @@ export default function VoiceAgentWidget() {
 
         try {
           // Сначала найдем Ailock по имени
-          const searchResponse = await fetch(`/.netlify/functions/ailock-interaction?action=search&name=${encodeURIComponent(toAilockName)}`);
+          const searchResponse = await fetch(`/.netlify/functions/ailock-interaction?action=search&name=${encodeURIComponent(toAilockName)}`, {
+            credentials: 'include'
+          });
           const searchData = await searchResponse.json();
           
           if (!searchData.ailocks || searchData.ailocks.length === 0) {

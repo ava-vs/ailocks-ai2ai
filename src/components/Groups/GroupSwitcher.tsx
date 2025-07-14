@@ -46,6 +46,7 @@ function useGroups() {
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({
           requests: [
             {
@@ -108,6 +109,7 @@ function useGroups() {
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({
           requests: [
             {

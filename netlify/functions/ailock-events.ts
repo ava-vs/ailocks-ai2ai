@@ -1,6 +1,6 @@
 import type { Handler, HandlerEvent } from '@netlify/functions';
 import { AilockService } from '../../src/lib/ailock/core';
-import { verifyToken } from '../../src/lib/auth/auth-utils';
+import { verifyToken, getAuthTokenFromHeaders } from '../../src/lib/auth/auth-utils';
 import { withDbRetry } from '../../src/lib/db';
 import { AilockMessageService } from '../../src/lib/ailock/message-service';
 
@@ -23,9 +23,16 @@ export const handler: Handler = async (event: HandlerEvent) => {
     return responseWithCORS(405, { error: 'Method Not Allowed' });
   }
 
-  const token = event.headers.authorization?.split(' ')[1];
+  // If no token in Authorization header, try to get from cookies
+  let token = event.headers.authorization?.split(' ')[1];
   if (!token) {
-    return responseWithCORS(401, { error: 'Unauthorized' });
+    const cookieToken = getAuthTokenFromHeaders(event.headers);
+    
+    if (!cookieToken) {
+      return responseWithCORS(401, { error: 'Unauthorized' });
+    }
+    
+    token = cookieToken;
   }
 
   const payload = verifyToken(token);

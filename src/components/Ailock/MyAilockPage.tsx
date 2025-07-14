@@ -1,4 +1,4 @@
-// import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useUserSession } from '@/hooks/useUserSession';
 import { useAilock } from '@/hooks/useAilock';
 import { ailockApi } from '@/lib/ailock/api';
@@ -11,9 +11,36 @@ import { getLevelInfo } from '@/lib/ailock/shared';
 import { useDailyTasks } from '@/hooks/useDailyTasks';
 import { ArrowLeft, Star, Zap, Trophy, TrendingUp, CheckCircle, Clock, Award, Brain, Sparkles, Crown, Target, Cpu, Search, BrainCircuit, Loader2 } from 'lucide-react';
 
+// Компонент для предотвращения hydration mismatch
+function ClientOnly({ children, fallback }: { children: React.ReactNode, fallback?: React.ReactNode }) {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  return isClient ? <>{children}</> : (fallback || (
+    <div className="h-full flex items-center justify-center p-8 bg-gradient-to-br from-slate-900/95 to-slate-800/95">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-white/60 text-lg">Загрузка профиля Ailock...</p>
+      </div>
+    </div>
+  ));
+}
+
 export default function MyAilockPage() {
-  const { currentUser } = useUserSession();
-  const { profile, isLoading: loading, error } = useAilock();
+  return (
+    <ClientOnly>
+      <MyAilockPageContent />
+    </ClientOnly>
+  );
+}
+
+function MyAilockPageContent() {
+  const { currentUser, isAuthenticated } = useUserSession();
+  const { profile, isLoading: loading, error, loadProfile } = useAilock();
+  const [retryCount, setRetryCount] = useState(0);
   // const [ setActiveTab] = useState<'overview' | 'skills' | 'achievements'>('overview');
   // const [hoveredSkill, setHoveredSkill] = useState<string | null>(null);
   const { tasks: dailyTasks, loading: tasksLoading, error: tasksError } = useDailyTasks();
@@ -34,12 +61,21 @@ export default function MyAilockPage() {
     }
   };
 
+  // Попытка загрузить профиль при смене статуса авторизации
+  useEffect(() => {
+    if (isAuthenticated && !profile && !loading && retryCount < 3) {
+      console.log('Attempting to load Ailock profile, retry:', retryCount);
+      loadProfile();
+      setRetryCount(prev => prev + 1);
+    }
+  }, [isAuthenticated, profile, loading, loadProfile, retryCount]);
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center p-8 bg-gradient-to-br from-slate-900/95 to-slate-800/95">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-white/60 text-lg">Loading your Ailock...</p>
+          <p className="text-white/60 text-lg">Загрузка профиля Ailock...</p>
         </div>
       </div>
     );
@@ -52,13 +88,16 @@ export default function MyAilockPage() {
           <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="text-red-400 text-2xl">⚠️</span>
           </div>
-          <h2 className="text-white text-xl font-semibold mb-2">Failed to Load Ailock</h2>
+          <h2 className="text-white text-xl font-semibold mb-2">Ошибка загрузки Ailock</h2>
           <p className="text-white/60 mb-6">{error}</p>
           <button 
-            onClick={() => ailockApi.getProfile(currentUser.id)} 
+            onClick={() => {
+              loadProfile();
+              setRetryCount((prev: number) => prev + 1);
+            }} 
             className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
           >
-            Try Again
+            Попробовать снова
           </button>
         </div>
       </div>
@@ -66,7 +105,26 @@ export default function MyAilockPage() {
   }
   
   if (!profile) {
-    return null;
+    return (
+      <div className="h-full flex items-center justify-center p-8 bg-gradient-to-br from-slate-900/95 to-slate-800/95">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-yellow-400 text-2xl">⚠️</span>
+          </div>
+          <h2 className="text-white text-xl font-semibold mb-2">Profile not found</h2>
+          <p className="text-white/60 mb-6">Не удалось загрузить профиль Ailock. Убедитесь, что вы авторизованы.</p>
+          <button 
+            onClick={() => {
+              loadProfile();
+              setRetryCount(0); 
+            }} 
+            className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
+          >
+            Загрузить профиль
+          </button>
+        </div>
+      </div>
+    );
   }
 
   const levelInfo = getLevelInfo(profile.xp);

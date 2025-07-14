@@ -44,7 +44,7 @@ async function getUserAilockId(event: HandlerEvent): Promise<string | null> {
   }
   
   try {
-    const profile = await ailockService.getOrCreateAilock(payload.sub);
+    const profile = await ailockService.getAilockProfileByUserId(payload.sub);
     return profile.id;
   } catch (error) {
     console.error('Failed to get user ailock:', error);

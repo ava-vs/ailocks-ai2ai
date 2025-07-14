@@ -38,7 +38,7 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
       console.log('Description is missing, using intent extraction service to enrich data...');
       
       const session = sessionId ? await chatService.getSession(sessionId) : null;
-      const ailockProfile = await ailockService.getOrCreateAilock(userId);
+      const ailockProfile = await ailockService.getFullAilockProfileByUserId(userId);
       const chatSummary = await chatService.getOrCreateSummary(userId);
 
       const extractedData = await intentExtractionService.extractIntentData(
@@ -116,7 +116,7 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
     let xpResult = null;
     if (userId) {
       try {
-        const ailockProfile = await ailockService.getOrCreateAilock(userId);
+        const ailockProfile = await ailockService.getFullAilockProfileByUserId(userId);
         if (ailockProfile) {
           xpResult = await ailockService.gainXp(ailockProfile.id, 'intent_created', { intentId: newIntent[0].id });
           console.log(`✅ XP Gained for intent creation: ${xpResult.xpGained}`);

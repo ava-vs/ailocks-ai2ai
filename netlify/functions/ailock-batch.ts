@@ -82,7 +82,7 @@ async function getUserAilockId(event: HandlerEvent): Promise<string | null> {
 
   try {
     const ailockService = new AilockService();
-    const profile = await withDbRetry(() => ailockService.getOrCreateAilock(payload.sub));
+    const profile = await withDbRetry(() => ailockService.getAilockProfileByUserId(payload.sub));
     return profile.id;
   } catch (error) {
     console.error('Failed to get user ailock ID:', error);
@@ -161,21 +161,43 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
               };
 
             case 'get_profile':
-              const profile = await ailockService.getOrCreateAilock(userAilockId);
-              return {
-                type: 'get_profile',
-                data: profile
-              };
+              try {
+                const profile = await ailockService.getFullAilockProfileById(userAilockId);
+                return {
+                  type: 'get_profile',
+                  data: profile
+                };
+              } catch (error) {
+                console.error(`[ailock-batch] Error getting profile for user ${userAilockId}:`, error);
+                return {
+                  type: 'get_profile',
+                  error: {
+                    message: 'Profile not found or cannot be retrieved.',
+                    details: error instanceof Error ? error.message : 'Unknown error'
+                  }
+                };
+              }
 
             case 'get_profile_by_user_id':
               if (req.type !== 'get_profile_by_user_id' || !req.userId) {
                 throw new Error('Missing userId for get_profile_by_user_id operation');
               }
-              const userProfile = await ailockService.getOrCreateAilock(req.userId);
-              return {
-                type: 'get_profile_by_user_id',
-                data: userProfile
-              };
+              try {
+                const userProfile = await ailockService.getFullAilockProfileByUserId(req.userId);
+                return {
+                  type: 'get_profile_by_user_id',
+                  data: userProfile
+                };
+              } catch (error) {
+                console.error(`[ailock-batch] Error getting profile for user ${req.userId}:`, error);
+                return {
+                  type: 'get_profile_by_user_id',
+                  error: {
+                    message: 'Profile not found or cannot be retrieved.',
+                    details: error instanceof Error ? error.message : 'Unknown error'
+                  }
+                };
+              }
 
             case 'get_daily_tasks':
               const tasks = await ailockService.getTasksForUser(userAilockId);

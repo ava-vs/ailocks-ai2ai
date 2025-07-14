@@ -6,6 +6,16 @@ import type { FullAilockProfile } from './store';
 
 const API_BASE = '/.netlify/functions';
 
+export function buildHeaders(extra: Record<string, string> = {}): HeadersInit {
+  if (typeof window === 'undefined') return { ...extra };
+  const token = localStorage.getItem('auth_token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extra
+  };
+}
+
 export const searchIntents = async (query: string) => {
   try {
     const userLocation = JSON.parse(localStorage.getItem('userLocation') || '{}');
@@ -104,10 +114,18 @@ export const deleteIntent = async (intentId: string, userId: string) => {
 
 export const getAilockProfile = async (forceRefresh = false): Promise<FullAilockProfile | null> => {
   try {
+    // Получаем токен из localStorage, если он там есть
+    const token = localStorage.getItem('auth_token');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    
+    // Добавляем Authorization заголовок, если есть токен
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
     const res = await fetch('/.netlify/functions/ailock-batch', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
+      headers: buildHeaders(), 
       body: JSON.stringify({ requests: [{ type: 'get_profile' }] })
     });
     if (!res.ok) throw new Error('Failed to fetch Ailock profile');
@@ -131,9 +149,7 @@ export const gainAilockXp = async (eventType: string, context: Record<string, an
     
     const response = await fetch(`${API_BASE}/ailock-gain-xp`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: buildHeaders(),
       body: JSON.stringify({
         userId,
         eventType,
@@ -158,7 +174,7 @@ export const getProfileByUserId = async (userId: string): Promise<FullAilockProf
   try {
     const res = await fetch(`${API_BASE}/ailock-batch`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildHeaders(),
       credentials: 'include',
       body: JSON.stringify({
         requests: [{ type: 'get_profile_by_user_id', userId }]
@@ -203,7 +219,7 @@ export const sendAilockMessage = async ({
   try {
     const res = await fetch(`${API_BASE}/ailock-interaction`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildHeaders(),
       credentials: 'include',
       body: JSON.stringify({ toAilockId, message, type, intentId, sessionId })
     });
@@ -221,7 +237,8 @@ export const sendAilockMessage = async ({
 export const fetchInboxInteractions = async (limit = 50, offset = 0) => {
   try {
     const res = await fetch(`${API_BASE}/ailock-interaction?limit=${limit}&offset=${offset}`, {
-      credentials: 'include'
+      credentials: 'include',
+      headers: buildHeaders()
     });
     if (!res.ok) throw new Error('Failed to fetch inbox');
     const data = await res.json();
@@ -242,7 +259,7 @@ export const replyAilockMessage = async ({
   try {
     const res = await fetch(`${API_BASE}/ailock-interaction`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildHeaders(),
       credentials: 'include',
       body: JSON.stringify({ originalInteractionId, responseContent })
     });
@@ -260,7 +277,7 @@ export const replyAilockMessage = async ({
 export const getIntentInteractions = async (intentId: string) => {
   const res = await fetch('/.netlify/functions/ailock-batch', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: buildHeaders(),
     credentials: 'include',          // ⬅ auth cookies
     body: JSON.stringify({
       requests: [{ type: 'get_intent_interactions', intentId }]
@@ -269,7 +286,7 @@ export const getIntentInteractions = async (intentId: string) => {
   if (!res.ok) throw new Error(await res.text());
 
   const json = await res.json();
-  const item = json.results[0];      // актуальное имя поля
+  const item = json.results[0];      // actual field name
   if (!item.success) throw new Error(item.error || 'Failed');
   return item.data as AilockInteraction[];
 }; 

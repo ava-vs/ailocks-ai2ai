@@ -1,7 +1,7 @@
 import { atom } from 'nanostores';
 import { useStore } from '@nanostores/react';
-import { useCallback } from 'react';
-import { getAilockProfile } from '../lib/api'; // добавить импорт
+import { useCallback, useEffect } from 'react';
+import { getAilockProfile } from '../lib/api'; 
 
 interface AuthUser {
   id: string;
@@ -27,6 +27,14 @@ const authAtom = atom<AuthState>(initialState);
 
 // Helper to fetch JSON with proper headers
 async function fetchJson(url: string, options: RequestInit = {}) {
+  // Automatically attach Bearer token from localStorage if exists and header not provided
+  const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+  if (token && (!options.headers || !(options.headers as any)['Authorization'])) {
+    options.headers = {
+      ...options.headers,
+      Authorization: `Bearer ${token}`
+    };
+  }
   console.log('fetchJson: making request', { url, method: options.method || 'GET' });
   const res = await fetch(url, {
     credentials: 'include',
@@ -46,20 +54,43 @@ async function fetchJson(url: string, options: RequestInit = {}) {
 }
 
 async function bootstrapAuth() {
-  // Check the recentlyLoggedOut flag
-  if (typeof window !== 'undefined' && localStorage.getItem('recentlyLoggedOut') === 'true') {
-    // Clear the flag and do not perform automatic authorization
+  // Try to read stored auth token
+  const storedToken = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+
+  // If user just logged out, skip auth check
+  const recentlyLoggedOut = localStorage.getItem('recentlyLoggedOut') === 'true';
+  if (recentlyLoggedOut) {
     localStorage.removeItem('recentlyLoggedOut');
+    localStorage.removeItem('sessionActive');
     authAtom.set({ user: null, loading: false, error: null });
     return;
   }
-  
+
   try {
-    const data = await fetchJson('/.netlify/functions/auth-me');
+    // If token stored, pass it explicitly to auth-me (fetchJson still adds automatically, но явное лучше)
+    const authMeOptions = storedToken ? { headers: { Authorization: `Bearer ${storedToken}` } } : {};
+    const data = await fetchJson('/.netlify/functions/auth-me', authMeOptions);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sessionActive', 'true');
+      if (data?.token) {
+        localStorage.setItem('auth_token', data.token);
+      }
+      if (data?.id) {
+        localStorage.setItem('userId', data.id);
+      }
+    }
     authAtom.set({ user: data, loading: false, error: null });
-  } catch {
+  } catch (error) {
+    console.error('Bootstrap auth error:', error);
+    // On error, clear session
+    localStorage.removeItem('sessionActive');
     authAtom.set({ user: null, loading: false, error: null });
   }
+}
+
+// Call bootstrap once when module loads (client side)
+if (typeof window !== 'undefined') {
+  bootstrapAuth();
 }
 
 export function useAuth() {
@@ -73,8 +104,12 @@ export function useAuth() {
         method: 'POST',
         body: JSON.stringify({ email, password })
       });
+      // save token
+      if (typeof window !== 'undefined' && data?.token) {
+        localStorage.setItem('auth_token', data.token);
+      }
       console.log('useAuth: login success', data);
-      // Store userId in localStorage for legacy helpers that still rely on it
+      // Store userId in localStorage for helpers that rely on it
       if (typeof window !== 'undefined' && data?.id) {
         localStorage.setItem('userId', data.id);
       }
@@ -97,8 +132,15 @@ export function useAuth() {
         method: 'POST',
         body: JSON.stringify({ email, password, name, country, city })
       });
+      if (typeof window !== 'undefined' && data?.token) {
+        localStorage.setItem('auth_token', data.token);
+      }
       console.log('useAuth: signup success', data);
       authAtom.set({ user: data, loading: false, error: null });
+      if (typeof window !== 'undefined') {
+        const { getAilockProfile } = await import('../lib/api');
+        getAilockProfile(true);
+      }
     } catch (err: any) {
       console.error('useAuth: signup error', err);
       authAtom.set({ user: null, loading: false, error: err.message });
@@ -119,6 +161,7 @@ export function useAuth() {
         if (typeof window !== 'undefined') {
           localStorage.setItem('recentlyLoggedOut', 'true');
           localStorage.removeItem('userId');
+          localStorage.removeItem('auth_token');
         }
       }
     } finally {

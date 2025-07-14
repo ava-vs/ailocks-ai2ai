@@ -1,6 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { db } from '../../src/lib/db';
-import { users } from '../../src/lib/schema';
+import { users, ailocks } from '../../src/lib/schema';
 import { hashPassword, createToken, setAuthCookie } from '../../src/lib/auth/auth-utils';
 import { eq } from 'drizzle-orm';
 
@@ -109,6 +109,43 @@ export const handler: Handler = async (event) => {
     }
 
     console.log('Auth signup: user created', { id: inserted.id, email: inserted.email });
+
+    // Create Ailock profile with retry mechanism
+    let ailockProfile = null;
+    attempt = 0;
+    
+    while (attempt < maxAttempts) {
+      try {
+        const ailockProfileData = {
+          userId: inserted.id,
+          name: 'Ailock',
+          level: 1,
+          xp: 0,
+          skillPoints: 1,
+          avatarPreset: 'default',
+          velocity: 50,
+          insight: 50,
+          efficiency: 50,
+          economy: 50,
+          convenience: 50
+        };
+
+        [ailockProfile] = await db.insert(ailocks).values(ailockProfileData).returning();
+        console.log('Auth signup: Ailock profile created', { id: ailockProfile.id, userId: ailockProfile.userId });
+        break;
+      } catch (ailockError) {
+        attempt++;
+        console.log(`Auth signup: Ailock profile creation attempt ${attempt} failed`, ailockError);
+        
+        if (attempt >= maxAttempts) {
+          console.error('Failed to create Ailock profile after multiple attempts', ailockError);
+          // Do not interrupt registration process if profile creation fails
+          break;
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+      }
+    }
 
     const token = createToken({ sub: inserted.id, email: inserted.email, name: inserted.name ?? '' });
 

@@ -44,7 +44,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
 
     // Wrap the database-dependent call with our retry logic
     const ailock = await withDbRetry(() =>
-      ailockService.getOrCreateAilock(payload.sub)
+      ailockService.getFullAilockProfileByUserId(payload.sub)
     );
 
     const group = await withDbRetry(() =>
