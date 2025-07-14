@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { X, Search, MapPin, Briefcase, User, Clock, ChevronDown, Filter, Trash2 } from 'lucide-react';
+import IntentDetailModal from '../Chat/IntentDetailModal';
+import { X, Search, MapPin, Briefcase, User, Clock, Trash2 } from 'lucide-react';
 import { useUserSession } from '@/hooks/useUserSession';
 import { deleteIntent } from '@/lib/api';
 import toast from 'react-hot-toast';
@@ -12,6 +13,8 @@ interface Intent {
   category: string;
   distance: string;
   requiredSkills: string[];
+  /** duplicate for compatibility with IntentDetailModal */
+  skills: string[];
   budget?: string;
   timeline?: string;
   priority: string;
@@ -29,13 +32,18 @@ interface MobileIntentPanelProps {
 type Tab = 'nearby' | 'in-work' | 'my-intents';
 
 export default function MobileIntentPanel({ isOpen, onClose }: MobileIntentPanelProps) {
+  // --- local state for intent modal ---
+  const [selectedIntent, setSelectedIntent] = useState<Intent | null>(null);
+  const [isIntentModalOpen, setIntentModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('nearby');
   const [intents, setIntents] = useState<Intent[]>([]);
   const [inWorkIntents, setInWorkIntents] = useState<Intent[]>([]);
   const [myIntents, setMyIntents] = useState<Intent[]>([]);
+  const [loadingMyIntents, setLoadingMyIntents] = useState<boolean>(false);
   const [isLoadingIntents, setIsLoadingIntents] = useState(true);
+  const [isFetchingError, setIsFetchingError] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string | null>(null);
-  const [dbStatus, setDbStatus] = useState<'connected' | 'error' | 'checking'>('checking');
+  // const [dbStatus, setDbStatus] = useState<'connected' | 'error' | 'checking'>('checking');
   const { currentUser } = useUserSession();
   const [deletingIntentId, setDeletingIntentId] = useState<string | null>(null);
 
@@ -99,12 +107,54 @@ export default function MobileIntentPanel({ isOpen, onClose }: MobileIntentPanel
   }, [currentUser.id, inWorkIntents]);
 
   useEffect(() => {
-    if (isOpen && intents.length === 0) {
-      // Fetch mock intents for demo
-      setIntents(getMockIntents());
-      setIsLoadingIntents(false);
+    const fetchIntents = async (query = '') => {
+      setIsLoadingIntents(true);
+      try {
+        const response = await fetch(`/.netlify/functions/intents-list?q=${encodeURIComponent(query)}`, {
+          credentials: 'include'
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setIntents(data);
+          setIsFetchingError(false);
+        } else {
+          console.error('Failed to fetch intents');
+          setIsFetchingError(true);
+          setIntents([]);
+        }
+      } catch (error) {
+        console.error('Error fetching intents:', error);
+        setIsFetchingError(true);
+        setIntents([]);
+      } finally {
+        setIsLoadingIntents(false);
+      }
+    };
+
+    const fetchMyIntents = async () => {
+      if (!currentUser?.id || currentUser.id === 'loading') return;
+      setLoadingMyIntents(true);
+      try {
+        const resp = await fetch(`/.netlify/functions/intents-list?userId=${currentUser.id}&myIntents=true`, { credentials: 'include' });
+        if (resp.ok) {
+          const res = await resp.json();
+          const list = Array.isArray(res) ? res : res.intents;
+          setMyIntents(list || []);
+        } else {
+          console.error('Failed to fetch my intents');
+        }
+      } catch (err) {
+        console.error('Error fetching my intents:', err);
+      } finally {
+        setLoadingMyIntents(false);
+      }
+    };
+
+    if (isOpen) {
+      fetchIntents();
+      fetchMyIntents();
     }
-  }, [isOpen, intents.length]);
+  }, [isOpen, currentUser.id]);
 
   useEffect(() => {
     // Load persisted In-Work intents when user changes
@@ -151,39 +201,6 @@ export default function MobileIntentPanel({ isOpen, onClose }: MobileIntentPanel
     }
   };
 
-  const getMockIntents = (): Intent[] => [
-    {
-      id: 'mock-1',
-      title: 'Develop a new AI-powered design tool',
-      description: 'Looking for a senior frontend developer to build a revolutionary design tool...',
-      category: 'Technology',
-      requiredSkills: ['React', 'TypeScript', 'Figma API'],
-      budget: '$50,000',
-      timeline: '3 months',
-      priority: 'high',
-      matchScore: 92,
-      distance: 'Remote',
-      createdAt: new Date(Date.now() - 3600000).toISOString(),
-      userName: 'Lirea',
-      isOwn: false
-    },
-    {
-      id: 'mock-2',
-      title: 'Marketing campaign for a new mobile app',
-      description: 'Need a marketing expert to run a campaign for our new app in Brazil...',
-      category: 'Marketing',
-      requiredSkills: ['Social Media', 'SEO', 'Content Creation'],
-      budget: '$15,000',
-      timeline: '2 months',
-      priority: 'medium',
-      matchScore: 85,
-      distance: '< 5 miles',
-      createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-      userName: 'Marco',
-      isOwn: false
-    }
-  ];
-
   const formatTimeAgo = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -202,8 +219,15 @@ export default function MobileIntentPanel({ isOpen, onClose }: MobileIntentPanel
     return "just now";
   };
 
+  const openIntentModal = (intent: Intent) => {
+    // ensure skills populated for modal compatibility
+    const intentWithSkills: Intent = { ...intent, skills: intent.requiredSkills };
+    setSelectedIntent(intentWithSkills);
+    setIntentModalOpen(true);
+  };
+
   const IntentCard = ({ intent, showDeleteButton = false }: { intent: Intent; showDeleteButton?: boolean }) => (
-    <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3.5 mb-3 hover:border-slate-600/80 transition-colors duration-200">
+    <div onClick={() => openIntentModal(intent)} className="cursor-pointer bg-slate-800/50 border border-slate-700/50 rounded-lg p-3.5 mb-3 hover:border-slate-600/80 transition-colors duration-200">
       <div className="flex justify-between items-start mb-2">
         <h4 className="text-sm font-semibold text-white/90 leading-tight flex-1 pr-2">
           {intent.title}
@@ -293,8 +317,21 @@ export default function MobileIntentPanel({ isOpen, onClose }: MobileIntentPanel
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-slate-900/95 backdrop-blur-lg">
-      {/* Header */}
+    <>
+      {isIntentModalOpen && selectedIntent && (
+        <IntentDetailModal
+          isOpen={isIntentModalOpen}
+          onClose={() => setIntentModalOpen(false)}
+          intent={selectedIntent}
+          alreadyInWork={inWorkIntents.some(i => i.id === selectedIntent.id)}
+          onStartWork={(intent) => {
+            // dispatch event so other panels sync
+            window.dispatchEvent(new CustomEvent('intent-in-work', { detail: intent }));
+          }}
+        />
+      )}
+
+      <div className="fixed inset-0 z-50 flex flex-col bg-slate-900/95 backdrop-blur-lg">
       <div className="flex items-center justify-between p-4 border-b border-white/10">
         <h2 className="text-lg font-bold text-white">Intents</h2>
         <button 
@@ -371,6 +408,8 @@ export default function MobileIntentPanel({ isOpen, onClose }: MobileIntentPanel
         
         {isLoadingIntents ? (
           <LoadingSkeleton />
+        ) : isFetchingError ? (
+          <p className="text-center text-red-400">Failed to load intents. Please try again later.</p>
         ) : (
           <div>
             {activeTab === 'nearby' && (
@@ -380,21 +419,32 @@ export default function MobileIntentPanel({ isOpen, onClose }: MobileIntentPanel
               inWorkIntents.length > 0 ? inWorkIntents.map(intent => <IntentCard key={intent.id} intent={intent} />) : <EmptyState tab="in-work" />
             )}
             {activeTab === 'my-intents' && (
-              myIntents.length > 0 ? myIntents.map(intent => <IntentCard key={intent.id} intent={intent} showDeleteButton={true} />) : <EmptyState tab="my-intents" />
-            )}
+                loadingMyIntents ? (
+                  <LoadingSkeleton />
+                ) : (
+                  myIntents.length > 0 ? (
+                    myIntents.map(intent => (
+                      <IntentCard key={intent.id} intent={intent} showDeleteButton={true} />
+                    ))
+                  ) : (
+                    <EmptyState tab="my-intents" />
+                  )
+                )
+              )}
           </div>
         )}
       </div>
 
-      {/* Status Bar */}
-      <div className="p-4 border-t border-white/10">
+      {/* Status Bar removed */}
+      
         <div className="flex items-center justify-between text-xs text-slate-400">
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${dbStatus === 'connected' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-            <span>{dbStatus === 'connected' ? 'Live Database' : 'Demo Data'}</span>
+            
+            
           </div>
         </div>
       </div>
-    </div>
+    {/* </div> */}
+  </>
   );
 }
