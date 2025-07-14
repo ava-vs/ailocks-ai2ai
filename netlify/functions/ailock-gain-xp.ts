@@ -40,15 +40,24 @@ export const handler: Handler = async (event: HandlerEvent) => {
     }
 
     const ailockService = new AilockService();
+
+    // Get profile by userId to know the exact ailockId
+    const profile = await withDbRetry(() =>
+      ailockService.getAilockProfileByUserId(payload.sub)
+    );
+    if (!profile) {
+      return responseWithCORS(404, { error: 'Ailock profile not found for user.' });
+    }
+
     // Wrap the database-dependent call with our retry logic
     const result = await withDbRetry(() =>
-      ailockService.gainXp(payload.sub, eventType as XpEventType, context)
+      ailockService.gainXp(profile.id, eventType as XpEventType, context)
     );
 
+    // Return the result as is
     return responseWithCORS(200, {
-      success: true,
-      message: 'XP processed successfully.',
-      data: result,
+      ...result,
+      message: 'XP processed successfully.'
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

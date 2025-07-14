@@ -306,10 +306,8 @@ export class AilockInboxService {
 
     try {
       const response = await fetch('/.netlify/functions/ailock-events', {
-        credentials: 'include', // Используем HTTP-only куки
-        headers: { 
-          'Content-Type': 'application/json'
-        }
+        credentials: 'include', 
+        headers: buildHeaders()
       });
 
       if (!response.ok) {
@@ -419,9 +417,7 @@ export class AilockInboxService {
       const response = await fetch('/.netlify/functions/ailock-interaction', {
         method: 'PUT',
         credentials: 'include', // Используем HTTP-only куки
-        headers: { 
-          'Content-Type': 'application/json'
-        },
+        headers: buildHeaders(),
         body: JSON.stringify({ interactionId })
       });
 

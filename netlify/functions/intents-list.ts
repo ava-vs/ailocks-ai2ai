@@ -79,13 +79,29 @@ export const handler: Handler = async (event) => {
            sql`title ILIKE ${'%' + term + '%'}`,
            sql`description ILIKE ${'%' + term + '%'}`,
            sql`category ILIKE ${'%' + term + '%'}`,
-           sql`array_to_string(required_skills, ',') ILIKE ${'%' + term + '%'}`
+           sql`array_to_string(required_skills, ',') ILIKE ${'%' + term + '%'}` // <--- Changed this line
          )
        );
       
       const keywordResults = await withDbRetry(
         async () => db
-          .select()
+          .select({
+            id: intents.id,
+            userId: intents.userId,
+            title: intents.title,
+            description: intents.description,
+            category: intents.category,
+            targetCountry: intents.targetCountry,
+            targetCity: intents.targetCity,
+            requiredSkills: intents.requiredSkills,
+            budget: intents.budget,
+            timeline: intents.timeline,
+            priority: intents.priority,
+            status: intents.status,
+            createdAt: intents.createdAt,
+            match_percentage: sql<number>`50`, // placeholder score for keyword search
+            semanticMatch: sql<boolean>`false`
+          })
           .from(intents)
           .where(or(...searchConditions))
           .limit(limit)

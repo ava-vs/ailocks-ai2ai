@@ -1,5 +1,6 @@
 import type { FullAilockProfile, XpEventType } from './shared';
 import { ailockStore, setAilockProfile, setAilockLoading, setAilockError } from '@/lib/store';
+import { buildHeaders } from '../api';
 
 const API_BASE_URL = '/.netlify/functions';
 
@@ -51,7 +52,7 @@ export async function getProfile(userId: string): Promise<FullAilockProfile> {
 export async function upgradeSkill(ailockId: string, skillId: string): Promise<{ success: boolean; message: string }> {
   const response = await fetch(`${API_BASE_URL}/ailock-upgrade-skill`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: buildHeaders(),
     body: JSON.stringify({ ailockId, skillId }),
   });
   if (!response.ok) {
@@ -65,11 +66,11 @@ export async function upgradeSkill(ailockId: string, skillId: string): Promise<{
  * Awards experience points to an Ailock for a specific event.
  * This is the client-side function that calls the Netlify function.
  */
-export async function gainXp(ailockId: string, eventType: XpEventType, context: Record<string, any> = {}) {
+export async function gainXp(eventType: XpEventType, context: Record<string, any> = {}) {
   const response = await fetch(`${API_BASE_URL}/ailock-gain-xp`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ailockId, eventType, context }),
+    headers: buildHeaders(),
+    body: JSON.stringify({ eventType, context }),
   });
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ error: 'Failed to gain XP', details: response.statusText }));
@@ -82,4 +83,4 @@ export const ailockApi = {
   getProfile,
   upgradeSkill,
   gainXp,
-}; 
+};

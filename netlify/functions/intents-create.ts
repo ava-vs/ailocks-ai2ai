@@ -5,7 +5,7 @@ import type { Handler, HandlerEvent, HandlerResponse } from '@netlify/functions'
 import { chatService } from '../../src/lib/chat-service';
 import { intentExtractionService } from '../../src/lib/intent-extraction-service';
 import { ailockService } from '../../src/lib/ailock/core';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResponse> => {
   if (event.httpMethod === 'OPTIONS') {
@@ -106,8 +106,27 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
 
     // Create intent in database, with retry logic for transient connection errors (up to 3 attempts)
     // Always save only a single intent object, never an array
+    // Use raw SQL to insert only existing columns, avoiding missing escrow_order_id
     const newIntent = await withDbRetry(async () => {
-      return await db.insert(intents).values(intentDataToSave).returning();
+      const result = await db.execute(sql`
+        insert into "intents" (
+          "user_id", "title", "description", "category", "target_country", "target_city",
+          "required_skills", "budget", "timeline", "priority", "status"
+        ) values (
+          ${intentDataToSave.userId},
+          ${intentDataToSave.title},
+          ${intentDataToSave.description},
+          ${intentDataToSave.category},
+          ${intentDataToSave.targetCountry},
+          ${intentDataToSave.targetCity},
+          ${`{${skillsArray.map(s => '"' + s.replace(/"/g, '\"') + '"').join(',')}}`},
+          ${intentDataToSave.budget},
+          ${intentDataToSave.timeline},
+          ${intentDataToSave.priority},
+          ${intentDataToSave.status}
+        ) returning *;
+      `);
+      return result.rows as any;
     }, 3); // 3 attempts max
 
     console.log(`✅ Intent created: ${newIntent[0].id} - ${intentDataToSave.title}`);
