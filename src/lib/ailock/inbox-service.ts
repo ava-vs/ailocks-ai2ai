@@ -227,10 +227,8 @@ export class AilockInboxService {
     try {
       const response = await fetch('/.netlify/functions/ailock-batch', {
         method: 'POST',
-        credentials: 'include', // Используем HTTP-only куки
-        headers: { 
-          'Content-Type': 'application/json'
-        },
+        credentials: 'include', 
+        headers: buildHeaders(),
         body: JSON.stringify({
           requests: [
             {
