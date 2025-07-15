@@ -8,6 +8,7 @@ export interface User {
   email: string;
   country?: string | null;
   city?: string | null;
+  escrow_user_id?: string | null;
 }
 
 export function useUserSession() {
@@ -31,7 +32,8 @@ export function useUserSession() {
     name: authUser.name,
     email: authUser.email,
     country: authUser.country,
-    city: authUser.city
+    city: authUser.city,
+    escrow_user_id: authUser.escrow_user_id
   } : {
     id: 'loading',
     name: 'Loading...',

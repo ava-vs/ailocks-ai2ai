@@ -9,6 +9,7 @@ interface AuthUser {
   name: string;
   country?: string | null;
   city?: string | null;
+  escrow_user_id?: string | null;
 }
 
 interface AuthState {

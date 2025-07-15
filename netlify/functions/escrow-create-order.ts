@@ -1,8 +1,11 @@
 // English comment: Using type-only imports for types as required by verbatimModuleSyntax.
-import type { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
+import type { Handler, HandlerEvent } from "@netlify/functions";
 import axios from 'axios';
-import { escrowClient } from "../../src/lib/services/escrow-client";
+import { EscrowClient } from "../../src/lib/services/escrow-client";
 import type { GroupOrderPayload } from "../../src/lib/services/escrow-client";
+import { db } from '../../src/lib/db';
+import { users, escrowUserLinks } from '../../src/lib/schema';
+import { eq } from 'drizzle-orm';
 
 /**
  * English comment: Helper function to create a standardized JSON response with CORS headers.
@@ -22,99 +25,105 @@ const jsonResp = (statusCode: number, body: object) => ({
 });
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*', 
+  'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS'
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-export const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
-  // Handle preflight requests for CORS
+export const handler: Handler = async (event: HandlerEvent) => {
+  // Handle CORS preflight requests
   if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 204,
-      headers: corsHeaders,
-      body: ''
-    };
+    return { statusCode: 204, headers: corsHeaders, body: '' };
   }
 
-  // Ensure the request is a POST
+  // Basic validation
   if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      body: JSON.stringify({ error: 'Method Not Allowed' }),
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    };
+    return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }), headers: { ...corsHeaders, 'Content-Type': 'application/json' } };
+  }
+  if (!event.body) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'Missing request body' }), headers: { ...corsHeaders, 'Content-Type': 'application/json' } };
   }
 
-  // --- TEMPORARY TEST CODE ---
-  let token;
   try {
-    const { ESCROW_API_URL, ESCROW_SYSTEM_EMAIL, ESCROW_SYSTEM_PASSWORD, ESCROW_API_KEY } = process.env;
+    // 1. Parse incoming data
+    const { title, description, customerIds, milestones, recipient_email } = JSON.parse(event.body);
 
-    if (!ESCROW_API_URL || !ESCROW_SYSTEM_EMAIL || !ESCROW_SYSTEM_PASSWORD || !ESCROW_API_KEY) {
-      throw new Error('Missing required environment variables for Escrow auth: ESCROW_API_URL, ESCROW_SYSTEM_EMAIL, ESCROW_SYSTEM_PASSWORD, ESCROW_API_KEY');
+    if (!title || !description || !customerIds || !Array.isArray(customerIds) || customerIds.length === 0 || !recipient_email) {
+      return jsonResp(400, { error: 'Missing required fields: title, description, customerIds, and recipient_email are required.' });
     }
 
-    // DEBUG: Replicating the exact cURL request from Postman
-    console.log('Attempting login by replicating the exact cURL request...');
-    const apiUrl = process.env.ESCROW_API_URL + '/auth/login';
+    // Find recipient user by email
+    const recipientUserRes = await db.select({ id: users.id }).from(users).where(eq(users.email, recipient_email)).limit(1);
+    if (recipientUserRes.length === 0) {
+      return jsonResp(404, { error: `Recipient user with email ${recipient_email} not found.` });
+    }
+    const recipientUserId = recipientUserRes[0].id;
+
+    // Find recipient's escrow user id
+    const recipientEscrowLinkRes = await db.select({ escrowUserId: escrowUserLinks.escrowUserId }).from(escrowUserLinks).where(eq(escrowUserLinks.ai2aiUserId, recipientUserId)).limit(1);
+    if (recipientEscrowLinkRes.length === 0) {
+      return jsonResp(404, { error: `Escrow user link not found for recipient ${recipient_email}.` });
+    }
+    const recipientEscrowId = recipientEscrowLinkRes[0].escrowUserId;
+
+    // Combine creator's and recipient's escrow IDs
+    const finalCustomerIds = [...new Set([...customerIds, recipientEscrowId])];
+
+    if (finalCustomerIds.length < 2) {
+        return jsonResp(400, { error: 'Order must have at least two unique participants (creator and recipient).' });
+    }
+
+    // 2. Authenticate with Escrow API to get a token
+    const { ESCROW_API_URL, ESCROW_SYSTEM_EMAIL, ESCROW_SYSTEM_PASSWORD } = process.env;
+    if (!ESCROW_API_URL || !ESCROW_SYSTEM_EMAIL || !ESCROW_SYSTEM_PASSWORD) {
+      throw new Error('Missing required environment variables for Escrow authentication.');
+    }
+
+    const apiUrl = ESCROW_API_URL + '/auth/login';
     const authResponse = await axios.post(apiUrl, 
-      {
-        email: ESCROW_SYSTEM_EMAIL,
-        password: ESCROW_SYSTEM_PASSWORD
-      },
+      { email: ESCROW_SYSTEM_EMAIL, password: ESCROW_SYSTEM_PASSWORD },
       {
         headers: {
           'Content-Type': 'application/json',
-          // This cookie seems to be required by the server's nginx configuration.
-          'Cookie': 'refresh_token=14019b3f6063ee4a717682a1a6845b4b78872c4ae5d64d72ca8e998ed700afdc'
+          'Cookie': 'refresh_token=14019b3f6063ee4a717682a1a6845b4b78872c4ae5d64d72ca8e998ed700afdc' // Required by nginx
         }
       }
     );
 
-    token = authResponse.data.access_token; // Corrected field name based on Postman test
+    const token = authResponse.data.access_token;
     if (!token) {
       throw new Error('Failed to retrieve access_token from Escrow auth response.');
     }
 
-  } catch (error: any) {
-    console.error('Escrow authentication failed:', error.response?.data || error.message);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to authenticate with Escrow API.', details: error.response?.data || error.message }),
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    // 3. Construct the payload for the Escrow API
+    const payload: GroupOrderPayload = {
+      title,
+      description,
+      customerIds: finalCustomerIds,
+      milestones: milestones || [], // Use provided milestones or default to an empty array
     };
-  }
 
-  // 2. Use the obtained token to create an order with a hardcoded payload
-  const payload: GroupOrderPayload = {
-     "customerIds": [
-       "c1c6ec67-3ad4-40af-80a8-6d76cdc54036",
-       "9afc1ce8-e7d6-4ecf-b098-648b810ea9c9"
-     ],
-     "title": "Test Author's collection: Australia + Brazil",
-     "description": "Test description: Collecting orders for a limited collection. Minimum lot – 200 units.",
-     "milestones": [
-       {
-         "description": "Test description: One-time payment",
-         "amount": "4000",
-         "deadline": "2025-12-31T23:59:59Z"
-       }
-     ]
-  };
-
-  try {
+    console.log('Escrow Create Order Payload:', payload);
+    
+    // 4. Use the EscrowClient to create the order
+    const escrowClient = new EscrowClient();
     const newOrder = await escrowClient.createGroupOrder(payload, token);
+
+    // 5. Return the successful response
     return {
       statusCode: 201,
-      body: JSON.stringify(newOrder),
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify(newOrder),
     };
+
   } catch (error: any) {
-    console.error('Escrow API call to create order failed:', error.response?.data || error.message);
+    console.error('Failed to process escrow order creation:', error.response?.data || error.message);
     return {
-      statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to create escrow order.', details: error.response?.data || error.message }),
+      statusCode: error.response?.status || 500,
+      body: JSON.stringify({ 
+        error: 'Failed to create escrow group order.', 
+        details: error.response?.data || error.message 
+      }),
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     };
   }

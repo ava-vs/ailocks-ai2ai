@@ -6,6 +6,7 @@ import { useUserSession } from '../../hooks/useUserSession';
 import { useLocation } from '../../hooks/useLocation';
 import MessageBubble from './MessageBubble';
 import IntentPreview from './IntentPreview';
+import OrderPreview from './OrderPreview';
 import LevelUpModal from '../Ailock/LevelUpModal';
 import { searchIntents } from '../../lib/api';
 import toast from 'react-hot-toast';
@@ -70,6 +71,9 @@ export default function ChatInterface() {
   const [showIntentPreview, setShowIntentPreview] = useState(false);
   const [intentPreview, setIntentPreview] = useState<IntentPreviewData | null>(null);
   const [isCreatingIntent, setIsCreatingIntent] = useState(false);
+  const [isOrderPreviewVisible, setIsOrderPreviewVisible] = useState(false);
+  const [orderPreviewData, setOrderPreviewData] = useState<any>(null);
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [lastUserMessage, setLastUserMessage] = useState<string>('');
   const [ailockStatus, setAilockStatus] = useState<'unknown' | 'available' | 'unavailable'>('unknown');
   const [ailockId, setAilockId] = useState<string | null>(null);
@@ -500,6 +504,40 @@ export default function ChatInterface() {
     }
     
     handleCreateIntent(messageToUse);
+  };
+
+  const handleCreateOrderClick = async () => {
+    const messageToUse = input.trim() || lastUserMessage.trim();
+    if (!messageToUse) {
+      toast.error('Cannot create an order from an empty message.');
+      return;
+    }
+
+    setIsCreatingOrder(true);
+    toast.loading('Generating order details...');
+
+    try {
+      // This is a placeholder. In a real scenario, you would call
+      // a service that parses the message and generates order data.
+      const generatedOrderData = {
+        title: `Order based on: "${messageToUse.slice(0, 30)}..."`,
+        description: messageToUse,
+        milestones: [{ description: 'Initial milestone', amount: 100, deadline: '1 week' }],
+        amount: 100,
+        currency: 'USD',
+        recipient_email: '', // User will fill this in
+      };
+
+      setOrderPreviewData(generatedOrderData);
+      setIsOrderPreviewVisible(true);
+      toast.dismiss();
+    } catch (error) {
+      console.error('Error generating order preview:', error);
+      toast.dismiss();
+      toast.error('Failed to generate order details.');
+    } finally {
+      setIsCreatingOrder(false);
+    }
   };
 
   const handleCreateIntent = async (message: string) => {
@@ -945,6 +983,87 @@ export default function ChatInterface() {
     };
   }, []);
 
+  const handleConfirmOrder = async (orderData: any) => {
+    if (!currentUser || !currentUser.id || currentUser.id === 'loading') {
+      toast.error('You must be logged in to create an order.');
+      return;
+    }
+
+    if (!currentUser.escrow_user_id) {
+      toast.error('Your Escrow account is not linked. Please contact support.');
+      return;
+    }
+
+    console.log('Confirmed Order Data:', orderData);
+    setIsCreatingOrder(true);
+    toast.loading('Creating order...');
+
+    const payload = {
+      ...orderData,
+      customerIds: [currentUser.escrow_user_id], // API expects an array of customer IDs
+      // Final data sanitization before sending to the server
+      milestones: orderData.milestones.map((m: { description: string; amount: string | number; deadline: string }) => {
+        const deadlineDate = new Date();
+        // Basic parsing for simple deadlines like "1 week"
+        if (m.deadline.includes('week')) {
+          const weekCount = parseInt(m.deadline, 10) || 1;
+          deadlineDate.setDate(deadlineDate.getDate() + weekCount * 7);
+        } else {
+          // Default to 1 week if format is unrecognized
+          deadlineDate.setDate(deadlineDate.getDate() + 7);
+        }
+
+        return {
+          description: m.description,
+          amount: String(m.amount || '0'),
+          deadline: deadlineDate.toISOString(),
+        };
+      }).filter((m: { description: string; amount: string }) => m.description && parseFloat(m.amount) > 0),
+    };
+
+    if (payload.milestones.length === 0) {
+      toast.error("Order must have at least one valid milestone (description and amount > 0).");
+      setIsCreatingOrder(false);
+      return;
+    }
+
+    try {
+      const response = await fetch('/.netlify/functions/escrow-create-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create order');
+      }
+
+      const result = await response.json();
+      toast.dismiss();
+      toast.success(`Order created successfully! Order ID: ${result.id}`);
+      setIsOrderPreviewVisible(false);
+      setOrderPreviewData(null);
+    } catch (error: any) {
+      console.error('Error creating order:', error);
+      toast.dismiss();
+      toast.error(error.message || 'An unknown error occurred.');
+    } finally {
+      setIsCreatingOrder(false);
+    }
+  };
+
+  const handleCancelOrder = () => {
+    setIsOrderPreviewVisible(false);
+    setOrderPreviewData(null);
+  };
+
+  const handleOrderDataChange = (updatedData: any) => {
+    setOrderPreviewData(updatedData);
+  };
+
   return (
     <div className="relative flex flex-col h-full bg-slate-900/95 rounded-2xl border border-slate-700/50 shadow-2xl overflow-hidden">
             <VoiceAgentWidget />
@@ -1046,7 +1165,6 @@ export default function ChatInterface() {
         </div>
       </div>
       <div className="h-full flex flex-col bg-slate-900/90 text-white">
-        {/* Messages Area */}
         <div className="flex-1 overflow-y-auto min-h-0 p-3 md:p-6">
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
@@ -1155,8 +1273,21 @@ export default function ChatInterface() {
                                 <button onClick={() => handleViewDetails(intent)} className="p-1.5 text-gray-300 hover:text-white hover:bg-slate-700/50 rounded-md transition-colors">
                                   <Eye className="w-4 h-4" />
                                 </button>
-                                <button onClick={() => handleStartWork(intent)} className="p-1.5 text-gray-300 hover:text-white hover:bg-slate-700/50 rounded-md transition-colors">
-                                  <Plus className="w-4 h-4" />
+                                <button
+                                  onClick={handleCreateOrderClick}
+                                  disabled={isStreaming || isCreatingOrder}
+                                  className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800/50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors duration-200 text-sm font-medium shadow-md"
+                                >
+                                  {/* <Plus className="w-4 h-4" /> */}
+                                  <span>{language === 'ru' ? 'Создать заказ' : 'Create Order'}</span>
+                                </button>
+                                <button
+                                  onClick={handleCreateIntentClick}
+                                  disabled={isStreaming || isCreatingIntent}
+                                  className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800/50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors duration-200 text-sm font-medium shadow-md"
+                                >
+                                  {/* <Plus className="w-4 h-4" /> */}
+                                  <span>{language === 'ru' ? 'Создать интент' : 'Create Intent'}</span>
                                 </button>
                               </div>
                             </div>
@@ -1217,6 +1348,14 @@ export default function ChatInterface() {
               {/* INPUT ACTIONS */}
               <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-3">
                 <button
+                  title="Create Order"
+                  onClick={handleCreateOrderClick}
+                  disabled={!input.trim() && !lastUserMessage.trim()}
+                  className="flex h-8 items-center justify-center rounded-lg bg-purple-600 px-4 text-sm font-medium text-white transition-colors hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span>Create Order</span>
+                </button>
+                <button
                   title="Create Intent"
                   onClick={handleCreateIntentClick}
                   disabled={!input.trim() && !lastUserMessage.trim()}
@@ -1257,6 +1396,16 @@ export default function ChatInterface() {
       />
 
       {/* Intent Preview Modal */}
+      {isOrderPreviewVisible && orderPreviewData && (
+        <OrderPreview
+          {...orderPreviewData}
+          onConfirm={handleConfirmOrder}
+          onCancel={handleCancelOrder}
+          onDataChange={handleOrderDataChange}
+          isLoading={isCreatingOrder}
+        />
+      )}
+
       {showIntentPreview && intentPreview && (
         <IntentPreview
           {...intentPreview}

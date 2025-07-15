@@ -1,6 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { db } from '../../src/lib/db';
-import { users } from '../../src/lib/schema';
+import { users, escrowUserLinks } from '../../src/lib/schema';
 import { verifyToken, getAuthTokenFromHeaders } from '../../src/lib/auth/auth-utils';
 import { eq } from 'drizzle-orm';
 
@@ -49,7 +49,18 @@ export const handler: Handler = async (event) => {
       };
     }
 
-    const userRes = await db.select().from(users).where(eq(users.id, payload.sub)).limit(1);
+    const userRes = await db.select({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      country: users.country,
+      city: users.city,
+      escrow_user_id: escrowUserLinks.escrowUserId
+    })
+    .from(users)
+    .leftJoin(escrowUserLinks, eq(users.id, escrowUserLinks.ai2aiUserId))
+    .where(eq(users.id, payload.sub))
+    .limit(1);
     if (userRes.length === 0) {
       return {
         statusCode: 404,
@@ -59,7 +70,7 @@ export const handler: Handler = async (event) => {
     }
 
     const user = userRes[0];
-    console.log('Auth me: success', { id: user.id, email: user.email });
+    console.log('Auth me: success', { id: user.id, email: user.email, escrow_user_id: user.escrow_user_id });
 
     return {
       statusCode: 200,
@@ -69,7 +80,8 @@ export const handler: Handler = async (event) => {
         email: user.email,
         name: user.name,
         country: user.country,
-        city: user.city
+        city: user.city,
+        escrow_user_id: user.escrow_user_id
       })
     };
   } catch (error) {
