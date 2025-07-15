@@ -344,6 +344,13 @@ export const groupInvites = pgTable('group_invites', {
   }
 });
 
+// Escrow User Mapping Table 
+export const escrowUserLinks = pgTable('escrow_user_links', {
+  ai2aiUserId: uuid('ai2ai_user_id').references(() => users.id, { onDelete: 'cascade' }).primaryKey(),
+  escrowUserId: uuid('escrow_user_id').notNull(),
+  createdAt: timestamp('created_at').defaultNow()
+});
+
 // Escrow API Integration Tables
 export const intentSyncLog = pgTable('intent_sync_log', {
   id: uuid('id').defaultRandom().primaryKey(),

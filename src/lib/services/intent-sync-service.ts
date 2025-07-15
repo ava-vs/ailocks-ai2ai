@@ -12,16 +12,9 @@
  */
 
 import { db } from '../db';
-import { 
-  intents, 
-  intentSyncLog, 
-  milestones, 
-  originEnum, 
-  syncDirectionEnum, 
-  syncStatusEnum 
-} from '../schema';
-import EscrowClient from './escrow-client';
-import type { EscrowGroupOrder, EscrowMilestone } from './escrow-client';
+import { intents, intentSyncLog, milestones } from '../schema';
+import { EscrowClient } from './escrow-client';
+import type { GroupOrderPayload, GroupOrderResponse } from './escrow-client';
 import { eq, and, isNull } from 'drizzle-orm';
 import { logger } from '../logger';
 import { v4 as uuidv4 } from 'uuid';
@@ -42,7 +35,7 @@ const STATUS_MAPPING_ESCROW_TO_AI2AI: Record<string, string> = {
   'FUNDED': 'funded',
   'IN_PROGRESS': 'in_progress',
   'COMPLETED': 'completed',
-  'CANCELLED': 'cancelled'
+  'CANCELLED': 'cancelled',
 };
 
 const STATUS_MAPPING_AI2AI_TO_ESCROW: Record<string, string> = {
@@ -91,14 +84,14 @@ export class IntentSyncService {
       return results;
     } catch (error) {
       logger.error('Failed to pull intents from Escrow API', error);
-      throw new Error(`Не удалось импортировать интенты: ${(error as Error).message}`);
+      throw new Error(`Could not import intents: ${(error as Error).message}`);
     }
   }
 
   /**
    * Импорт одного интента из Escrow API
    */
-  async importOrderFromEscrow(escrowOrder: EscrowGroupOrder): Promise<SyncResult> {
+  async importOrderFromEscrow(escrowOrder: GroupOrderResponse): Promise<SyncResult> {
     if (!escrowOrder.id) {
       return {
         success: false,
@@ -112,98 +105,52 @@ export class IntentSyncService {
         where: eq(intents.escrowOrderId, escrowOrder.id)
       });
       
-      let intentId: string;
-      let operationType: 'INSERT' | 'UPDATE';
-      
+      const operationType = existingIntent ? 'UPDATE' : 'INSERT';
+      const intentId = existingIntent ? existingIntent.id : uuidv4();
+
+      const intentData = {
+        title: escrowOrder.title || 'Untitled',
+        description: escrowOrder.description || '',
+        status: escrowOrder.status ? STATUS_MAPPING_ESCROW_TO_AI2AI[escrowOrder.status] || 'active' : 'active',
+        totalAmount: String(escrowOrder.totalAmount ?? 0),
+        fundedAmount: String(escrowOrder.fundedAmount ?? 0),
+        updatedAt: new Date(),
+      };
+
       if (existingIntent) {
-        // Обновляем существующий интент
-        intentId = existingIntent.id;
-        operationType = 'UPDATE';
-        
-        await db.update(intents)
-          .set({
-            title: escrowOrder.title,
-            description: escrowOrder.description,
-            status: escrowOrder.status ? STATUS_MAPPING_ESCROW_TO_AI2AI[escrowOrder.status] || 'active' : 'active',
-            totalAmount: escrowOrder.totalAmount ?? null,
-            fundedAmount: escrowOrder.fundedAmount ?? null,
-            updatedAt: new Date()
-          })
-          .where(eq(intents.id, intentId));
-          
-        // Удаляем существующие этапы, чтобы заменить их актуальными
-        await db.delete(milestones)
-          .where(eq(milestones.intentId, intentId));
+        await db.update(intents).set(intentData).where(eq(intents.id, intentId));
+        await db.delete(milestones).where(eq(milestones.intentId, intentId));
       } else {
-        // Создаем новый интент
-        intentId = uuidv4();
-        operationType = 'INSERT';
-        
-        await db.insert(intents)
-          .values({
-            id: intentId,
-            title: escrowOrder.title || 'Без названия',
-            description: escrowOrder.description || '',
-            category: 'external', // Категория для внешних интентов
-            origin: 'ESCROW',
-            escrowOrderId: escrowOrder.id,
-            status: escrowOrder.status ? STATUS_MAPPING_ESCROW_TO_AI2AI[escrowOrder.status] || 'active' : 'active',
-            totalAmount: escrowOrder.totalAmount ? escrowOrder.totalAmount : null,
-            fundedAmount: escrowOrder.fundedAmount ? escrowOrder.fundedAmount : null,
-            createdAt: escrowOrder.createdAt ? new Date(escrowOrder.createdAt) : new Date(),
-            updatedAt: new Date()
-          });
-      }
-      
-      // Создаем этапы для интента
-      if (escrowOrder.milestones && escrowOrder.milestones.length > 0) {
-        for (const milestone of escrowOrder.milestones) {
-          await db.insert(milestones)
-            .values({
-              intentId,
-              title: milestone.description || 'Этап платежа',
-              description: milestone.description,
-              amount: milestone.amount,
-              deadline: milestone.deadline ? new Date(milestone.deadline) : null,
-              status: 'pending'
-            });
-        }
-      }
-      
-      // Логируем операцию синхронизации
-      await db.insert(intentSyncLog)
-        .values({
-          intentId,
-          direction: 'PULL',
-          status: 'SUCCESS',
-          payload: escrowOrder
+        await db.insert(intents).values({
+          ...intentData,
+          id: intentId,
+          category: 'external',
+          origin: 'ESCROW',
+          escrowOrderId: escrowOrder.id,
+          createdAt: escrowOrder.createdAt ? new Date(escrowOrder.createdAt) : new Date(),
         });
-      
+      }
+
+      if (escrowOrder.milestones?.length > 0) {
+        const newMilestones = escrowOrder.milestones.map(m => ({
+          intentId,
+          title: m.description || 'Payment Stage', // Escrow's milestone.description -> our DB's milestone.title
+          description: m.description,
+          amount: String(m.amount),
+          deadline: m.deadline ? new Date(m.deadline) : null,
+          status: 'pending',
+        }));
+        await db.insert(milestones).values(newMilestones);
+      }
+
+      await db.insert(intentSyncLog).values({ intentId, direction: 'PULL', status: 'SUCCESS', payload: escrowOrder });
       return {
         success: true,
         intentId,
         escrowOrderId: escrowOrder.id,
-        message: `Intent ${operationType === 'INSERT' ? 'created' : 'updated'} successfully`
+        message: `Intent ${operationType.toLowerCase()}d successfully.`,
       };
     } catch (error) {
-      // Логируем ошибку синхронизации
-      if (escrowOrder.id) {
-        const existingIntent = await db.query.intents.findFirst({
-          where: eq(intents.escrowOrderId, escrowOrder.id)
-        });
-        
-        if (existingIntent) {
-          await db.insert(intentSyncLog)
-            .values({
-              intentId: existingIntent.id,
-              direction: 'PULL',
-              status: 'FAIL',
-              error: (error as Error).message,
-              payload: escrowOrder
-            });
-        }
-      }
-      
       logger.error(`Failed to import order ${escrowOrder.id}`, error);
       throw error;
     }
@@ -212,12 +159,12 @@ export class IntentSyncService {
   /**
    * Экспорт интента в Escrow API
    */
-  async pushIntentToEscrow(intentId: string, customerIds: string[]): Promise<SyncResult> {
+  async pushIntentToEscrow(intentId: string, customerIds: string[], userJwt: string): Promise<SyncResult> {
     if (customerIds.length < 2) {
       return {
         success: false,
         intentId,
-        message: 'Для создания группового заказа требуется минимум 2 заказчика'
+        message: 'A minimum of 2 customers is required for a group order.'
       };
     }
     
@@ -249,38 +196,38 @@ export class IntentSyncService {
       }
       
       // Формируем тело запроса для Escrow API
-      const escrowOrder: EscrowGroupOrder = {
+      const escrowPayload: GroupOrderPayload = {
         customerIds,
         title: intent.title,
-        description: intent.description,
+        description: intent.description || '',
         milestones: intent.milestones.map(m => ({
-          description: m.description || m.title,
-          amount: m.amount.toString(), // API требует строку
-          deadline: m.deadline ? m.deadline.toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 дней от сегодня
-        }))
+          description: m.title,
+          amount: String(m.amount), // API требует строку
+          deadline: m.deadline?.toISOString(),
+        })),
       };
-      
+
       // Если этапы не указаны, создаем один стандартный этап
-      if (escrowOrder.milestones.length === 0) {
+      if (escrowPayload.milestones.length === 0) {
         const totalAmount = intent.totalAmount || 100; // Значение по умолчанию, если не указано
         
-        escrowOrder.milestones = [{
+        escrowPayload.milestones = [{
           description: 'Единовременный платёж',
-          amount: totalAmount.toString(),
+          amount: String(totalAmount),
           deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 дней от сегодня
         }];
       }
       
       // Отправляем запрос в Escrow API
-      const createdOrder = await this.escrowClient.createGroupOrder(escrowOrder);
+      const createdOrder = await this.escrowClient.createGroupOrder(escrowPayload, userJwt);
       
       // Обновляем интент в нашей базе
       await db.update(intents)
         .set({
           origin: 'ESCROW',
           escrowOrderId: createdOrder.id,
-          totalAmount: createdOrder.totalAmount ? createdOrder.totalAmount : null,
-          fundedAmount: createdOrder.fundedAmount ? createdOrder.fundedAmount : null,
+          totalAmount: String(createdOrder.totalAmount ?? 0),
+          fundedAmount: String(createdOrder.fundedAmount ?? 0),
           status: createdOrder.status ? STATUS_MAPPING_ESCROW_TO_AI2AI[createdOrder.status] || 'active' : 'active',
           updatedAt: new Date()
         })
@@ -324,23 +271,14 @@ export class IntentSyncService {
   /**
    * Синхронизация статусов интента с Escrow API
    */
-  async syncIntentStatus(intentId: string, syncLastUpdated: boolean = false): Promise<SyncResult> {
+  async syncIntentStatus(intentId: string): Promise<SyncResult> {
     try {
       // Получаем интент из нашей базы
       const intent = await db.query.intents.findFirst({
         where: eq(intents.id, intentId)
       });
       
-      if (!intent) {
-        return {
-          success: false,
-          intentId,
-          message: 'Intent not found'
-        };
-      }
-      
-      // Проверяем, что интент связан с Escrow
-      if (intent.origin !== 'ESCROW' || !intent.escrowOrderId) {
+      if (!intent || intent.origin !== 'ESCROW' || !intent.escrowOrderId) {
         return {
           success: false,
           intentId,
@@ -355,8 +293,8 @@ export class IntentSyncService {
       await db.update(intents)
         .set({
           status: escrowOrder.status ? STATUS_MAPPING_ESCROW_TO_AI2AI[escrowOrder.status] || intent.status : intent.status,
-          totalAmount: escrowOrder.totalAmount ? escrowOrder.totalAmount : intent.totalAmount,
-          fundedAmount: escrowOrder.fundedAmount ? escrowOrder.fundedAmount : intent.fundedAmount,
+          totalAmount: String(escrowOrder.totalAmount ?? 0),
+          fundedAmount: String(escrowOrder.fundedAmount ?? 0),
           updatedAt: new Date()
         })
         .where(eq(intents.id, intentId));
@@ -367,12 +305,7 @@ export class IntentSyncService {
           intentId,
           direction: 'PULL',
           status: 'SUCCESS',
-          payload: {
-            id: escrowOrder.id,
-            status: escrowOrder.status,
-            totalAmount: escrowOrder.totalAmount,
-            fundedAmount: escrowOrder.fundedAmount
-          }
+          payload: escrowOrder
         });
       
       return {
@@ -391,7 +324,7 @@ export class IntentSyncService {
           error: (error as Error).message
         });
       
-      logger.error(`Failed to sync intent status ${intentId}`, error);
+      logger.error(`Failed to sync intent status for ${intentId}`, error);
       return {
         success: false,
         intentId,
