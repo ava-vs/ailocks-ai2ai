@@ -16,7 +16,6 @@ interface OrderPreviewProps {
   milestones: Omit<Milestone, 'id'>[];
   amount: number;
   currency: string;
-  recipient_email: string;
   onConfirm: (updatedData: any) => void;
   onCancel: () => void;
   onDataChange: (updatedData: any) => void;
@@ -29,7 +28,6 @@ export default function OrderPreview({
   milestones,
   amount,
   currency,
-  recipient_email,
   onConfirm, 
   onCancel, 
   onDataChange,
@@ -42,22 +40,20 @@ export default function OrderPreview({
   const [editableMilestones, setEditableMilestones] = useState<Milestone[]>([]);
   const [editableAmount, setEditableAmount] = useState(0);
   const [editableCurrency, setEditableCurrency] = useState('USD');
-  const [editableRecipient, setEditableRecipient] = useState('');
 
   const initialized = useRef(false);
 
   useEffect(() => {
     if (!initialized.current) {
-      console.log('OrderPreview LOADING DATA:', { title, description, milestones, amount, currency, recipient_email });
+      console.log('OrderPreview LOADING DATA:', { title, description, milestones, amount, currency });
       setEditableTitle(title || '');
       setEditableDescription(description || '');
       setEditableMilestones(milestones.map((m, i) => ({ ...m, id: i })) || []);
       setEditableAmount(amount || 0);
       setEditableCurrency(currency || 'USD');
-      setEditableRecipient(recipient_email || '');
       initialized.current = true;
     }
-  }, [title, description, milestones, amount, currency, recipient_email]);
+  }, [title, description, milestones, amount, currency]);
 
   useEffect(() => {
     const total = editableMilestones.reduce((sum, milestone) => sum + Number(milestone.amount || 0), 0);
@@ -71,11 +67,10 @@ export default function OrderPreview({
       milestones: editableMilestones.map(({ id, ...rest }) => rest),
       amount: editableAmount,
       currency: editableCurrency,
-      recipient_email: editableRecipient,
     };
     onDataChange(updatedData);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editableTitle, editableDescription, editableMilestones, editableAmount, editableCurrency, editableRecipient]);
+  }, [editableTitle, editableDescription, editableMilestones, editableAmount, editableCurrency]);
 
   const handleConfirm = () => {
     const finalOrderData = {
@@ -84,7 +79,6 @@ export default function OrderPreview({
       milestones: editableMilestones.map(({ id, ...rest }) => rest),
       amount: editableAmount,
       currency: editableCurrency,
-      recipient_email: editableRecipient,
     };
     onConfirm(finalOrderData);
   };
@@ -119,7 +113,7 @@ export default function OrderPreview({
       subtitle: 'Review and edit the order details below, then click "Create Order" to proceed.',
       titleLabel: 'Order Title',
       descriptionLabel: 'Description',
-      recipientLabel: 'Recipient Email',
+
       amountLabel: 'Total Amount',
       currencyLabel: 'Currency',
       milestonesLabel: 'Milestones',
@@ -136,7 +130,7 @@ export default function OrderPreview({
       subtitle: 'Проверьте и отредактируйте детали заказа ниже, затем нажмите «Создать заказ» для продолжения.',
       titleLabel: 'Название заказа',
       descriptionLabel: 'Описание',
-      recipientLabel: 'Email получателя',
+
       amountLabel: 'Общая сумма',
       currencyLabel: 'Валюта',
       milestonesLabel: 'Этапы',
@@ -199,17 +193,6 @@ export default function OrderPreview({
               />
             </div>
 
-            {/* Recipient Email */}
-            <div>
-              <label className="block text-sm font-medium text-white/80 mb-2">{texts.recipientLabel}</label>
-              <input
-                type="email"
-                value={editableRecipient}
-                onChange={(e) => setEditableRecipient(e.target.value)}
-                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-purple-400 focus:bg-white/15 transition-all"
-                placeholder="recipient@example.com"
-              />
-            </div>
 
             {/* Milestones */}
             <div>

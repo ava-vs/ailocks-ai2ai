@@ -524,8 +524,7 @@ export default function ChatInterface() {
         description: messageToUse,
         milestones: [{ description: 'Initial milestone', amount: 100, deadline: '1 week' }],
         amount: 100,
-        currency: 'USD',
-        recipient_email: '', // User will fill this in
+        currency: 'USD'
       };
 
       setOrderPreviewData(generatedOrderData);
@@ -988,15 +987,6 @@ export default function ChatInterface() {
       toast.error('You must be logged in to create an order.');
       return;
     }
-
-    if (!currentUser.escrow_user_id) {
-      toast.error('Your Escrow account is not linked. Please contact support.');
-      return;
-    }
-
-    console.log('Confirmed Order Data:', orderData);
-    setIsCreatingOrder(true);
-    toast.loading('Creating order...');
 
     const payload = {
       ...orderData,

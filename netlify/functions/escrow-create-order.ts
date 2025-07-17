@@ -48,29 +48,29 @@ export const handler: Handler = async (event: HandlerEvent) => {
     // 1. Parse incoming data
     const { title, description, customerIds, milestones, recipient_email } = JSON.parse(event.body);
 
-    if (!title || !description || !customerIds || !Array.isArray(customerIds) || customerIds.length === 0 || !recipient_email) {
-      return jsonResp(400, { error: 'Missing required fields: title, description, customerIds, and recipient_email are required.' });
+    if (!title || !description || !customerIds || !Array.isArray(customerIds) || customerIds.length === 0) {
+      return jsonResp(400, { error: 'Missing required fields: title, description, and customerIds are required.' });
     }
 
-    // Find recipient user by email
-    const recipientUserRes = await db.select({ id: users.id }).from(users).where(eq(users.email, recipient_email)).limit(1);
-    if (recipientUserRes.length === 0) {
-      return jsonResp(404, { error: `Recipient user with email ${recipient_email} not found.` });
-    }
-    const recipientUserId = recipientUserRes[0].id;
+    let finalCustomerIds = [...customerIds];
 
-    // Find recipient's escrow user id
-    const recipientEscrowLinkRes = await db.select({ escrowUserId: escrowUserLinks.escrowUserId }).from(escrowUserLinks).where(eq(escrowUserLinks.ai2aiUserId, recipientUserId)).limit(1);
-    if (recipientEscrowLinkRes.length === 0) {
-      return jsonResp(404, { error: `Escrow user link not found for recipient ${recipient_email}.` });
-    }
-    const recipientEscrowId = recipientEscrowLinkRes[0].escrowUserId;
+    if (recipient_email) {
+      // Find recipient user by email
+      const recipientUserRes = await db.select({ id: users.id }).from(users).where(eq(users.email, recipient_email)).limit(1);
+      if (recipientUserRes.length === 0) {
+        return jsonResp(404, { error: `Recipient user with email ${recipient_email} not found.` });
+      }
+      const recipientUserId = recipientUserRes[0].id;
 
-    // Combine creator's and recipient's escrow IDs
-    const finalCustomerIds = [...new Set([...customerIds, recipientEscrowId])];
+      // Find recipient's escrow user id
+      const recipientEscrowLinkRes = await db.select({ escrowUserId: escrowUserLinks.escrowUserId }).from(escrowUserLinks).where(eq(escrowUserLinks.ai2aiUserId, recipientUserId)).limit(1);
+      if (recipientEscrowLinkRes.length === 0) {
+        return jsonResp(404, { error: `Escrow user link not found for recipient ${recipient_email}.` });
+      }
+      const recipientEscrowId = recipientEscrowLinkRes[0].escrowUserId;
 
-    if (finalCustomerIds.length < 2) {
-        return jsonResp(400, { error: 'Order must have at least two unique participants (creator and recipient).' });
+      // Combine creator's and recipient's escrow IDs
+      finalCustomerIds = [...new Set([...finalCustomerIds, recipientEscrowId])];
     }
 
     // 2. Authenticate with Escrow API to get a token
