@@ -2,7 +2,7 @@
 import type { Handler, HandlerEvent } from "@netlify/functions";
 import axios from 'axios';
 import { EscrowClient } from "../../src/lib/services/escrow-client";
-import type { GroupOrderPayload } from "../../src/lib/services/escrow-client";
+import type { GroupOrderPayload, OrderPayload } from "../../src/lib/services/escrow-client";
 import { db } from '../../src/lib/db';
 import { users, escrowUserLinks } from '../../src/lib/schema';
 import { eq } from 'drizzle-orm';
@@ -95,19 +95,33 @@ export const handler: Handler = async (event: HandlerEvent) => {
       throw new Error('Failed to retrieve access_token from Escrow auth response.');
     }
 
-    // 3. Construct the payload for the Escrow API
-    const payload: GroupOrderPayload = {
-      title,
-      description,
-      customerIds: finalCustomerIds,
-      milestones: milestones || [], // Use provided milestones or default to an empty array
-    };
-
-    console.log('Escrow Create Order Payload:', payload);
-    
-    // 4. Use the EscrowClient to create the order
+    // 3. Construct the payload for the Escrow API and choose appropriate endpoint
     const escrowClient = new EscrowClient();
-    const newOrder = await escrowClient.createGroupOrder(payload, token);
+    let newOrder;
+    
+    if (finalCustomerIds.length === 1) {
+      // Use regular order API for single customer
+      const payload: OrderPayload = {
+        title,
+        description,
+        customerId: finalCustomerIds[0],
+        milestones: milestones || [], // Use provided milestones or default to an empty array
+      };
+      
+      console.log('Escrow Create Order Payload (Single Customer):', payload);
+      newOrder = await escrowClient.createOrder(payload, token);
+    } else {
+      // Use group order API for multiple customers
+      const payload: GroupOrderPayload = {
+        title,
+        description,
+        customerIds: finalCustomerIds,
+        milestones: milestones || [], // Use provided milestones or default to an empty array
+      };
+      
+      console.log('Escrow Create Group Order Payload (Multiple Customers):', payload);
+      newOrder = await escrowClient.createGroupOrder(payload, token);
+    }
 
     // 5. Return the successful response
     return {

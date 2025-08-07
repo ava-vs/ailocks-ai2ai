@@ -29,6 +29,13 @@ export interface GroupOrderPayload {
   milestones: EscrowMilestonePayload[];
 }
 
+export interface OrderPayload {
+  title: string;
+  description: string;
+  customerId: string; // Single customer ID for regular orders
+  milestones: EscrowMilestonePayload[];
+}
+
 export interface EscrowMilestoneResponse {
   id: string;
   description: string;
@@ -95,6 +102,27 @@ export class EscrowClient {
     } catch (error: any) {
       console.error('Failed to create escrow group order:', error.response?.data || error.message);
       throw new Error('Escrow API request to create group order failed.');
+    }
+  }
+
+  /**
+   * Creates a new regular order in the escrow system (single customer).
+   * @param payload - The data for the new order.
+   * @param userJwt - The JWT of the user initiating the creation for authorization.
+   * @returns The created order details.
+   */
+  async createOrder(payload: OrderPayload, userJwt: string): Promise<GroupOrderResponse> {
+    try {
+      const response = await this.axiosInstance.post<GroupOrderResponse>('/api/orders', payload, {
+        headers: {
+          'Authorization': `Bearer ${userJwt}`,
+          'X-API-Key': this.apiKey, // Add API key header as per docs
+        },
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Failed to create escrow order:', error.response?.data || error.message);
+      throw new Error('Escrow API request to create order failed.');
     }
   }
 
