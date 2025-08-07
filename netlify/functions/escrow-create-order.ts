@@ -101,22 +101,34 @@ export const handler: Handler = async (event: HandlerEvent) => {
     
     if (finalCustomerIds.length === 1) {
       // Use regular order API for single customer
+      // Convert milestones for regular orders (amount should be number)
+      const regularMilestones = (milestones || []).map((m: any) => ({
+        ...m,
+        amount: typeof m.amount === 'string' ? parseFloat(m.amount) : m.amount
+      }));
+      
       const payload: OrderPayload = {
         title,
         description,
         customerId: finalCustomerIds[0],
-        milestones: milestones || [], // Use provided milestones or default to an empty array
+        milestones: regularMilestones,
       };
       
       console.log('Escrow Create Order Payload (Single Customer):', payload);
       newOrder = await escrowClient.createOrder(payload, token);
     } else {
       // Use group order API for multiple customers
+      // Convert milestones for group orders (amount should be string)
+      const groupMilestones = (milestones || []).map((m: any) => ({
+        ...m,
+        amount: typeof m.amount === 'number' ? m.amount.toString() : m.amount
+      }));
+      
       const payload: GroupOrderPayload = {
         title,
         description,
         customerIds: finalCustomerIds,
-        milestones: milestones || [], // Use provided milestones or default to an empty array
+        milestones: groupMilestones,
       };
       
       console.log('Escrow Create Group Order Payload (Multiple Customers):', payload);
