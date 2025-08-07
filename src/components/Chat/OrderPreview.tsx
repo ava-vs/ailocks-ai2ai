@@ -16,6 +16,13 @@ interface OrderPreviewProps {
   milestones: Omit<Milestone, 'id'>[];
   amount: number;
   currency: string;
+  fundingGoal?: number;
+  cashback?: string;
+  minContribution?: number;
+  maxContribution?: number;
+  reportingFrequency?: string;
+  investorRequirements?: string;
+  projectRisks?: string;
   onConfirm: (updatedData: any) => void;
   onCancel: () => void;
   onDataChange: (updatedData: any) => void;
@@ -28,6 +35,13 @@ export default function OrderPreview({
   milestones,
   amount,
   currency,
+  fundingGoal,
+  cashback,
+  minContribution,
+  maxContribution,
+  reportingFrequency,
+  investorRequirements,
+  projectRisks,
   onConfirm, 
   onCancel, 
   onDataChange,
@@ -40,20 +54,34 @@ export default function OrderPreview({
   const [editableMilestones, setEditableMilestones] = useState<Milestone[]>([]);
   const [editableAmount, setEditableAmount] = useState(0);
   const [editableCurrency, setEditableCurrency] = useState('USD');
+  const [editableFundingGoal, setEditableFundingGoal] = useState<number | undefined>(0);
+  const [editableCashback, setEditableCashback] = useState('');
+  const [editableMinContribution, setEditableMinContribution] = useState<number | undefined>(0);
+  const [editableMaxContribution, setEditableMaxContribution] = useState<number | undefined>(0);
+  const [editableReportingFrequency, setEditableReportingFrequency] = useState('Еженедельно');
+  const [editableInvestorRequirements, setEditableInvestorRequirements] = useState('');
+  const [editableProjectRisks, setEditableProjectRisks] = useState('');
 
   const initialized = useRef(false);
 
   useEffect(() => {
     if (!initialized.current) {
-      console.log('OrderPreview LOADING DATA:', { title, description, milestones, amount, currency });
+      console.log('OrderPreview LOADING DATA:', { title, description, milestones, amount, currency, fundingGoal, cashback, minContribution, maxContribution, reportingFrequency, investorRequirements, projectRisks });
       setEditableTitle(title || '');
       setEditableDescription(description || '');
       setEditableMilestones(milestones.map((m, i) => ({ ...m, id: i })) || []);
       setEditableAmount(amount || 0);
       setEditableCurrency(currency || 'USD');
+      setEditableFundingGoal(fundingGoal || 0);
+      setEditableCashback(cashback || '');
+      setEditableMinContribution(minContribution || 0);
+      setEditableMaxContribution(maxContribution || 0);
+      setEditableReportingFrequency(reportingFrequency || 'Еженедельно');
+      setEditableInvestorRequirements(investorRequirements || '');
+      setEditableProjectRisks(projectRisks || '');
       initialized.current = true;
     }
-  }, [title, description, milestones, amount, currency]);
+  }, [title, description, milestones, amount, currency, fundingGoal, cashback, minContribution, maxContribution, reportingFrequency, investorRequirements, projectRisks]);
 
   useEffect(() => {
     const total = editableMilestones.reduce((sum, milestone) => sum + Number(milestone.amount || 0), 0);
@@ -67,10 +95,19 @@ export default function OrderPreview({
       milestones: editableMilestones.map(({ id, ...rest }) => rest),
       amount: editableAmount,
       currency: editableCurrency,
+      fundingGoal: editableFundingGoal,
+      cashback: editableCashback,
+      minContribution: editableMinContribution,
+      maxContribution: editableMaxContribution,
+      reportingFrequency: editableReportingFrequency,
+      investorRequirements: editableInvestorRequirements,
+      projectRisks: editableProjectRisks,
     };
     onDataChange(updatedData);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editableTitle, editableDescription, editableMilestones, editableAmount, editableCurrency]);
+  }, [editableTitle, editableDescription, editableMilestones, editableAmount, editableCurrency, 
+      editableFundingGoal, editableCashback, editableMinContribution, editableMaxContribution, 
+      editableReportingFrequency, editableInvestorRequirements, editableProjectRisks]);
 
   const handleConfirm = () => {
     const finalOrderData = {
@@ -79,6 +116,13 @@ export default function OrderPreview({
       milestones: editableMilestones.map(({ id, ...rest }) => rest),
       amount: editableAmount,
       currency: editableCurrency,
+      fundingGoal: editableFundingGoal,
+      cashback: editableCashback,
+      minContribution: editableMinContribution,
+      maxContribution: editableMaxContribution,
+      reportingFrequency: editableReportingFrequency,
+      investorRequirements: editableInvestorRequirements,
+      projectRisks: editableProjectRisks,
     };
     onConfirm(finalOrderData);
   };
@@ -113,7 +157,10 @@ export default function OrderPreview({
       subtitle: 'Review and edit the order details below, then click "Create Order" to proceed.',
       titleLabel: 'Order Title',
       descriptionLabel: 'Description',
-
+      
+      fundingGoalLabel: 'Funding Goal',
+      fundingGoalPlaceholder: '8000',
+      
       amountLabel: 'Total Amount',
       currencyLabel: 'Currency',
       milestonesLabel: 'Milestones',
@@ -122,6 +169,28 @@ export default function OrderPreview({
       milestoneDescriptionPlaceholder: 'Milestone description',
       milestoneAmountPlaceholder: 'Amount',
       milestoneDeadlinePlaceholder: 'Deadline (e.g., 2 weeks)',
+      
+      financialsLabel: 'Financial Parameters',
+      cashbackLabel: 'Cashback',
+      cashbackPlaceholder: '150% in goods',
+      minContributionLabel: 'Min. Contribution',
+      minContributionPlaceholder: '200',
+      maxContributionLabel: 'Max. Contribution',
+      maxContributionPlaceholder: '1000',
+      
+      communicationLabel: 'Communication with Co-investors',
+      reportingFrequencyLabel: 'Reporting Frequency',
+      daily: 'Daily',
+      weekly: 'Weekly',
+      monthly: 'Monthly',
+      byStages: 'By Stages',
+      
+      requirementsLabel: 'Requirements and Risks',
+      investorRequirementsLabel: 'Requirements for Co-investors',
+      investorRequirementsPlaceholder: 'Interest in sustainable fashion, willingness to wait 8 weeks...',
+      projectRisksLabel: 'Guarantees and Risks',
+      projectRisksPlaceholder: 'Possible delivery delays, design changes...',
+      
       createButton: 'Create Order',
       cancelButton: 'Cancel',
     },
@@ -130,7 +199,10 @@ export default function OrderPreview({
       subtitle: 'Проверьте и отредактируйте детали заказа ниже, затем нажмите «Создать заказ» для продолжения.',
       titleLabel: 'Название заказа',
       descriptionLabel: 'Описание',
-
+      
+      fundingGoalLabel: 'Цель сбора',
+      fundingGoalPlaceholder: '8000',
+      
       amountLabel: 'Общая сумма',
       currencyLabel: 'Валюта',
       milestonesLabel: 'Этапы',
@@ -139,9 +211,32 @@ export default function OrderPreview({
       milestoneDescriptionPlaceholder: 'Описание этапа',
       milestoneAmountPlaceholder: 'Сумма',
       milestoneDeadlinePlaceholder: 'Срок (например, 2 недели)',
+      
+      financialsLabel: 'Финансовые параметры',
+      cashbackLabel: 'Кэшбэк',
+      cashbackPlaceholder: '150% в виде товаров',
+      minContributionLabel: 'Мин. взнос',
+      minContributionPlaceholder: '200',
+      maxContributionLabel: 'Макс. взнос',
+      maxContributionPlaceholder: '1000',
+      
+      communicationLabel: 'Коммуникация с соинвесторами',
+      reportingFrequencyLabel: 'Частота отчетности',
+      daily: 'Ежедневно',
+      weekly: 'Еженедельно',
+      monthly: 'Ежемесячно',
+      byStages: 'По этапам',
+      
+      requirementsLabel: 'Требования и риски',
+      investorRequirementsLabel: 'Требования к соинвесторам',
+      investorRequirementsPlaceholder: 'Интерес к устойчивой моде, готовность ждать 8 недель...',
+      projectRisksLabel: 'Гарантии и Риски',
+      projectRisksPlaceholder: 'Возможные задержки поставок, изменения в дизайне...',
+      
       createButton: 'Создать заказ',
       cancelButton: 'Отмена',
     },
+    
   };
 
   const texts = allTexts[language as keyof typeof allTexts] || allTexts.en;
@@ -193,6 +288,32 @@ export default function OrderPreview({
               />
             </div>
 
+            {/* Funding Goal */}
+            <div>
+              <label className="block text-sm font-medium text-white/80 mb-2">{texts.fundingGoalLabel}</label>
+              <div className="flex space-x-3">
+                <select
+                  value={editableCurrency}
+                  onChange={(e) => setEditableCurrency(e.target.value)}
+                  className="bg-white/10 border border-white/20 rounded-lg text-white px-3 py-2.5 focus:outline-none focus:border-purple-400 focus:bg-white/15 transition-all w-1/4"
+                >
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                  <option value="BTC">BTC</option>
+                  <option value="ETH">ETH</option>
+                  <option value="RUB">RUB</option>
+                  <option value="BRL">BRL</option>
+                </select>
+                <input
+                  type="number"
+                  value={editableFundingGoal || ''}
+                  onChange={(e) => setEditableFundingGoal(Number(e.target.value) || 0)}
+                  className="w-3/4 px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-purple-400 focus:bg-white/15 transition-all"
+                  placeholder={texts.fundingGoalPlaceholder}
+                  required
+                />
+              </div>
+            </div>
 
             {/* Milestones */}
             <div>
@@ -239,6 +360,105 @@ export default function OrderPreview({
                 <Plus className="w-4 h-4" />
                 <span>{texts.addMilestone}</span>
               </button>
+            </div>
+            
+            {/* Financial Parameters */}
+            <div className="mt-8">
+              <h3 className="text-lg font-semibold text-white/90 mb-4">{texts.financialsLabel}</h3>
+              
+              {/* Cashback */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-white/80 mb-2">{texts.cashbackLabel}</label>
+                <input
+                  type="text"
+                  value={editableCashback}
+                  onChange={(e) => setEditableCashback(e.target.value)}
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-purple-400 focus:bg-white/15 transition-all"
+                  placeholder={texts.cashbackPlaceholder}
+                  required
+                />
+              </div>
+              
+              {/* Min and Max Contribution */}
+              <div className="flex space-x-4 mb-6">
+                <div className="w-1/2">
+                  <label className="block text-sm font-medium text-white/80 mb-2">{texts.minContributionLabel}</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <span className="text-white/60">{editableCurrency}</span>
+                    </div>
+                    <input
+                      type="number"
+                      value={editableMinContribution || ''}
+                      onChange={(e) => setEditableMinContribution(Number(e.target.value) || 0)}
+                      className="w-full pl-14 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-purple-400 focus:bg-white/15 transition-all"
+                      placeholder={texts.minContributionPlaceholder}
+                    />
+                  </div>
+                </div>
+                <div className="w-1/2">
+                  <label className="block text-sm font-medium text-white/80 mb-2">{texts.maxContributionLabel}</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <span className="text-white/60">{editableCurrency}</span>
+                    </div>
+                    <input
+                      type="number"
+                      value={editableMaxContribution || ''}
+                      onChange={(e) => setEditableMaxContribution(Number(e.target.value) || 0)}
+                      className="w-full pl-14 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-purple-400 focus:bg-white/15 transition-all"
+                      placeholder={texts.maxContributionPlaceholder}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Communication with Co-investors */}
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold text-white/90 mb-4">{texts.communicationLabel}</h3>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-white/80 mb-2">{texts.reportingFrequencyLabel}</label>
+                <select
+                  value={editableReportingFrequency}
+                  onChange={(e) => setEditableReportingFrequency(e.target.value)}
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-purple-400 focus:bg-white/15 transition-all"
+                >
+                  <option value="Ежедневно">{texts.daily}</option>
+                  <option value="Еженедельно">{texts.weekly}</option>
+                  <option value="Ежемесячно">{texts.monthly}</option>
+                  <option value="По этапам">{texts.byStages}</option>
+                </select>
+              </div>
+            </div>
+            
+            {/* Requirements and Risks */}
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold text-white/90 mb-4">{texts.requirementsLabel}</h3>
+              
+              {/* Requirements for Co-investors */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-white/80 mb-2">{texts.investorRequirementsLabel}</label>
+                <textarea
+                  value={editableInvestorRequirements}
+                  onChange={(e) => setEditableInvestorRequirements(e.target.value)}
+                  rows={3}
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-purple-400 focus:bg-white/15 transition-all resize-none"
+                  placeholder={texts.investorRequirementsPlaceholder}
+                />
+              </div>
+              
+              {/* Project Risks */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-white/80 mb-2">{texts.projectRisksLabel}</label>
+                <textarea
+                  value={editableProjectRisks}
+                  onChange={(e) => setEditableProjectRisks(e.target.value)}
+                  rows={3}
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-purple-400 focus:bg-white/15 transition-all resize-none"
+                  placeholder={texts.projectRisksPlaceholder}
+                />
+              </div>
             </div>
           </div>
 

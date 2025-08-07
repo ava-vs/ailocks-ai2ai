@@ -57,6 +57,9 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
     prevUserIdRef.current = displayUser.id;
   }, [displayUser?.id]);
   const [notificationCount, setNotificationCount] = useState(0);
+  const [newNearbyCount, setNewNearbyCount] = useState(0);
+  const [newInWorkCount, setNewInWorkCount] = useState(0);
+  const [newMyIntentsCount, setNewMyIntentsCount] = useState(0);
   const [deletingIntentId, setDeletingIntentId] = useState<string | null>(null);
 
   // Modal state
@@ -122,10 +125,16 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
       const updated = [intentToMove, ...prev];
       persistInWork(updated);
       toast.success('Intent added to "In Work"');
+      
+      if (activeTab !== 'in-work') {
+        // Инкрементируем счетчик новых элементов, если пользователь не на вкладке In Work
+        setNewInWorkCount(prev => prev + 1);
+      }
+      
       return updated;
     });
     setActiveTab('in-work');
-  }, [persistInWork, addIntentToInWork]);
+  }, [persistInWork, addIntentToInWork, activeTab]);
 
   const checkDbStatus = async () => {
     try {
@@ -152,9 +161,19 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
     // Add to my intents if it's created by current user
     if (newIntent.isOwn || newIntent.userId === displayUser?.id) {
       setMyIntents(prev => [newIntent, ...prev]);
-      setActiveTab('my-intents'); // Switch to My Intents tab
+      
+      if (activeTab !== 'my-intents') {
+        // Инкрементируем счетчик новых элементов, если пользователь не на вкладке My Intents
+        setNewMyIntentsCount(prev => prev + 1);
+      } else {
+        setActiveTab('my-intents'); // Switch to My Intents tab
+      }
     } else {
       setIntents(prev => [newIntent, ...prev]);
+      if (activeTab !== 'nearby') {
+        // Инкрементируем счетчик новых элементов, если пользователь не на вкладке Nearby
+        setNewNearbyCount(prev => prev + 1);
+      }
     }
     
     toast.success('New intent added to the list!');
@@ -169,6 +188,9 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
     setIsLoadingIntents(false);
     if (!isExpanded) {
       setNotificationCount(prev => prev + results.length);
+    } else {
+      // Показываем индикатор новых элементов во вкладке Nearby
+      setNewNearbyCount(prev => prev + results.length);
     }
   }, [isExpanded]);
 
@@ -182,6 +204,9 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
     setIsLoadingIntents(false);
     if (!isExpanded) {
       setNotificationCount(prev => prev + intents.length);
+    } else {
+      // Показываем индикатор новых элементов во вкладке Nearby
+      setNewNearbyCount(prev => prev + intents.length);
     }
   }, [isExpanded]);
 
@@ -279,6 +304,17 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
       window.removeEventListener('intent-in-work', handleIntentInWork as EventListener);
     };
   }, [handleSearchResults, handleVoiceSearchResults, handleIntentInWork]);
+
+  // Reset new item counter when switching tabs
+  useEffect(() => {
+    if (activeTab === 'nearby') {
+      setNewNearbyCount(0);
+    } else if (activeTab === 'in-work') {
+      setNewInWorkCount(0);
+    } else if (activeTab === 'my-intents') {
+      setNewMyIntentsCount(0);
+    }
+  }, [activeTab]);
 
   const fetchIntents = async (query = '') => {
     setIsLoadingIntents(true);
@@ -442,10 +478,6 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
               </span>
             )}
           </button>
-          <div className="flex flex-col items-center gap-y-2">
-            <span className="bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">NEW</span>
-            <Menu className="w-7 h-7 text-blue-400 mt-1" />
-          </div>
         </div>
 
         <button
@@ -461,7 +493,7 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
 
   const Tabs = () => (
     <div className="flex border-b border-slate-700/60 mb-4">
-      <div className="flex-1 flex space-x-1">
+      <div className="flex-1 flex justify-between px-1">
         <button
           onClick={() => setActiveTab('nearby')}
           className={`px-3 py-2 text-sm font-medium rounded-t-lg transition-colors ${
@@ -470,10 +502,14 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          <div className="flex items-center gap-2">
-            <Rss className="w-4 h-4" />
-            <span>Nearby</span>
-          </div>
+          <span className="relative">
+            Nearby
+            {newNearbyCount > 0 && (
+              <span className="absolute -top-1 -right-5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
+                {newNearbyCount > 9 ? '9+' : newNearbyCount}
+              </span>
+            )}
+          </span>
         </button>
         <button
           onClick={() => setActiveTab('in-work')}
@@ -484,11 +520,15 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
           }`}
         >
           <div className="flex items-center gap-2">
-            <Briefcase className="w-4 h-4" />
-            <span>In Work</span>
+            <span className="relative">In Work</span>
             {inWorkIntents.length > 0 && (
               <span className="bg-blue-500/50 text-white text-xs font-bold px-2 py-0.5 rounded-full">
                 {inWorkIntents.length}
+              </span>
+            )}
+            {newInWorkCount > 0 && (
+              <span className="absolute -top-1 -right-5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
+                {newInWorkCount > 9 ? '9+' : newInWorkCount}
               </span>
             )}
           </div>
@@ -502,29 +542,21 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
           }`}
         >
           <div className="flex items-center gap-2">
-            <User className="w-4 h-4" />
-            <span>My Intents</span>
+            <span className="relative">My Intents</span>
             {myIntents.length > 0 && (
               <span className="bg-green-500/50 text-white text-xs font-bold px-2 py-0.5 rounded-full">
                 {myIntents.length}
               </span>
             )}
+            {newMyIntentsCount > 0 && (
+              <span className="absolute -top-1 -right-5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
+                {newMyIntentsCount > 9 ? '9+' : newMyIntentsCount}
+              </span>
+            )}
           </div>
         </button>
       </div>
-      <div className="flex items-center">
-        <button onClick={() => {
-          fetchIntents(searchQuery || '');
-          if (activeTab === 'my-intents') {
-            fetchMyIntents();
-          }
-        }} title="Refresh" className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors">
-          <Zap className="w-4 h-4" />
-        </button>
-        <button onClick={() => setIsRightPanelExpanded?.(false)} title="Collapse" className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors">
-          <ChevronRight className="w-5 h-5" />
-        </button>
-      </div>
+      {/* Верхние кнопки меню были убраны по требованию */}
     </div>
   );
 
@@ -556,9 +588,9 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
       </div>
 
       <p className="text-xs text-slate-400 mb-3 leading-snug">
-          {intent.description.substring(0, 100)}{intent.description.length > 100 ? '...' : ''}
+        {intent.description.substring(0, 100)}{intent.description.length > 100 ? '...' : ''}
       </p>
-      
+
       <div className="flex flex-wrap gap-1.5 mb-3">
         {intent.requiredSkills.slice(0, 3).map(skill => (
           <span key={skill} className="bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded text-xs font-medium border border-purple-500/30">
@@ -617,18 +649,18 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
       </p>
     </div>
   );
-  
+
   const LoadingSkeleton = () => (
     <div className="space-y-3">
       {[...Array(3)].map((_, i) => (
         <div key={i} className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3.5 animate-pulse">
-            <div className="h-4 bg-slate-700 rounded w-3/4 mb-3"></div>
-            <div className="h-3 bg-slate-700 rounded w-full mb-4"></div>
-            <div className="h-3 bg-slate-700 rounded w-1/2 mb-4"></div>
-            <div className="flex gap-2">
-                <div className="h-5 bg-slate-700 rounded w-16"></div>
-                <div className="h-5 bg-slate-700 rounded w-16"></div>
-            </div>
+          <div className="h-4 bg-slate-700 rounded w-3/4 mb-3"></div>
+          <div className="h-3 bg-slate-700 rounded w-full mb-4"></div>
+          <div className="h-3 bg-slate-700 rounded w-1/2 mb-4"></div>
+          <div className="flex gap-2">
+            <div className="h-5 bg-slate-700 rounded w-16"></div>
+            <div className="h-5 bg-slate-700 rounded w-16"></div>
+          </div>
         </div>
       ))}
     </div>
@@ -636,10 +668,6 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
 
   return (
     <div className="h-full flex flex-col bg-slate-900/80 backdrop-blur-sm text-white border-l border-slate-700/50">
-      {/* <div className="p-4 border-b border-slate-700/60">
-        <AilockWidget />
-      </div> */}
-
       <div className="p-4">
         <Tabs />
       </div>
@@ -650,7 +678,7 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
             Results for: <span className="text-white font-medium">"{searchQuery}"</span>
           </p>
         )}
-        
+
         {isLoadingIntents ? (
           <LoadingSkeleton />
         ) : (
@@ -682,14 +710,16 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
             <Rss className={`w-3 h-3 ${dbStatus === 'connected' ? 'text-green-500' : 'text-yellow-500'}`} />
             <span>{dbStatus === 'connected' ? 'Live Database' : 'Demo Data'}</span>
           </div>
-          <button 
-            onClick={() => setIsRightPanelExpanded?.(!isExpanded)} 
-            className="text-slate-400 hover:text-white transition-colors"
-          >
-            {isExpanded ? 'Collapse' : 'Expand'}
-          </button>
         </div>
       </div>
+
+      <button
+        onClick={() => setIsRightPanelExpanded?.(false)}
+        className="absolute top-1/2 -translate-y-1/2 left-[-1.25rem] w-10 h-10 flex items-center justify-center rounded-full bg-slate-800/80 hover:bg-slate-700/80 transition-colors"
+        title="Collapse"
+      >
+        <ChevronLeft className="w-5 h-5 text-slate-300" />
+      </button>
 
       {/* Intent detail modal */}
       <IntentDetailModal
