@@ -517,15 +517,39 @@ export default function ChatInterface() {
     toast.loading('Generating order details...');
 
     try {
-      // This is a placeholder. In a real scenario, you would call
-      // a service that parses the message and generates order data.
-      const generatedOrderData = {
-        title: `Order based on: "${messageToUse.slice(0, 30)}..."`,
-        description: messageToUse,
-        milestones: [{ description: 'Initial milestone', amount: 100, deadline: '1 week' }],
-        amount: 100,
-        currency: 'USD'
-      };
+      let generatedOrderData;
+
+      // Check if the message contains "Rio Fusion" for demo order
+      if (messageToUse.toLowerCase().includes('rio fusion')) {
+        generatedOrderData = {
+          title: "'Rio Fusion' clothing collection",
+          description: "A 12-piece capsule collection that fuses Australian minimalism with Brazilian vibrancy. Made from eco-friendly materials. Limited edition.",
+          milestones: [
+            { description: 'Design and prototyping phase', amount: 2000, deadline: '3 weeks' },
+            { description: 'Material sourcing and production setup', amount: 3000, deadline: '6 weeks' },
+            { description: 'Manufacturing and quality control', amount: 2000, deadline: '10 weeks' },
+            { description: 'Marketing and launch preparation', amount: 1000, deadline: '12 weeks' }
+          ],
+          amount: 8000,
+          currency: 'USD',
+          fundingGoal: 8000,
+          cashback: '150% in the form of goods from the collection, plus exclusive access',
+          minContribution: 200,
+          maxContribution: 1000,
+          reportingFrequency: 'Еженедельно',
+          investorRequirements: 'Interest in sustainable fashion, willingness to wait 8 weeks for production, minimum investment of $200',
+          projectRisks: 'Possible delivery delays due to eco-friendly material sourcing, design changes based on feedback, limited edition production constraints'
+        };
+      } else {
+        // Default order generation logic
+        generatedOrderData = {
+          title: `Order based on: "${messageToUse.slice(0, 30)}..."`,
+          description: messageToUse,
+          milestones: [{ description: 'Initial milestone', amount: 100, deadline: '1 week' }],
+          amount: 100,
+          currency: 'USD'
+        };
+      }
 
       setOrderPreviewData(generatedOrderData);
       setIsOrderPreviewVisible(true);
