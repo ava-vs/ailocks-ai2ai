@@ -5,20 +5,20 @@ Enable secure distribution of digital products (files, audio, video, archives) b
 
 - Scope: up to 200MB per item; repository delivery as archive; retention 7 days.
 - Payments: Stripe only for MVP (Checkout + Webhooks).
-- Delivery model: Claim-Check pattern with short-lived, presigned URLs; server stores only encrypted blobs.
+- Delivery model: Claim-Check pattern with chunked upload/download via Netlify Functions + Netlify Blobs; server stores only encrypted blobs and manifests.
 - Optional (post-MVP): Streamed video, IPFS/WebRTC.
 
 ## 2. Requirements
 - Max size: 200MB per file.
 - Types: Any (subject to policy); repos as .zip/.tar.* archives.
 - Retention: 7 days; revocation: revoke on expiry or policy breach.
-- Security: E2EE (AES-256-GCM + X25519/Ed25519), presigned URLs, antivirus/moderation checks, audit logs, rate limiting.
+- Security: E2EE (AES-256-GCM + X25519/Ed25519), chunked upload/download endpoints (per-chunk), antivirus/moderation checks, audit logs, rate limiting.
 - Payments: Stripe; gate delivery on paid status (webhook-driven).
 - UX: Seamless messaging-driven flow; delivery receipts; status badges.
 
 ## 3. Architecture Overview
 - New bounded context/service: DigitalDistributionService integrated with AilockMessageService via new interaction types.
-- Storage: S3-compatible object storage (R2/S3/B2) with presigned URLs.
+- Storage: Netlify Blobs (site/deploy stores). No presigned URLs; uploads handled via Netlify Functions/Edge with multipart/form-data and chunked strategy.
 - Crypto: Client-side encrypt/decrypt (E2EE). Server keeps encrypted data and key envelopes.
 - Messaging: use existing inbox/batch API to orchestrate offer, invoice, delivery, and receipts.
 
@@ -35,7 +35,11 @@ Policy notes:
 
 ## 5. API Endpoints (Netlify Functions)
 - POST /.netlify/functions/products-create — register product metadata/policy
-- POST /.netlify/functions/products-upload-init — presigned URL for encrypted upload
+- POST /.netlify/functions/products-upload-init — start chunked upload; returns uploadId, chunkSize, storage prefix
+- POST /.netlify/functions/products-upload-chunk — upload a single chunk {uploadId, index, bytes} (<= 4MB)
+- POST /.netlify/functions/products-upload-complete — finalize upload; persist manifest (chunk hashes, size, content_hash)
+- GET  /.netlify/functions/products-download-manifest — return encrypted manifest for recipient
+- GET  /.netlify/functions/products-download-chunk — return chunk by index (with ACL/TTL and download counters)
 - POST /.netlify/functions/products-offer — send product_offer (via AilockMessageService)
 - POST /.netlify/functions/products-invoice — create/return Stripe checkout link
 - POST /.netlify/functions/payments/stripe-webhook — process Stripe events → mark paid
@@ -61,14 +65,14 @@ Batch extensions (/.netlify/functions/ailock-batch):
 - stripe-webhook confirms → status=paid; proceed to grant.
 
 3) Encrypt & Upload
-- Client encrypts (AES-256-GCM), computes content_hash, uploads via presigned URL.
-- Store storage_pointer, hash, size.
+- Client encrypts (AES-256-GCM), splits into chunks (<= 4MB safe limit), computes per-chunk hashes and overall content_hash; uploads chunks via upload-chunk.
+- On complete, call upload-complete to write manifest; store storage_pointer (prefix), hash, size.
 
 4) Grant (Delivery Ticket)
 - Create key_envelope for recipient (X25519); send product_delivery with claim-check and TTL.
 
 5) Download & Ack
-- Recipient downloads, decrypts, verifies content_hash; sends delivery_receipt (Ed25519 + client_hash).
+- Recipient fetches manifest, downloads chunks sequentially (download-chunk), reassembles and decrypts, verifies content_hash; sends delivery_receipt (Ed25519 + client_hash).
 
 6) Dispute/Refund (optional)
 - Open dispute; use logs, signatures, moderation results; Stripe handles chargebacks.
@@ -77,7 +81,7 @@ Batch extensions (/.netlify/functions/ailock-batch):
 - E2EE: client-side encrypt/decrypt; server never sees plaintext.
 - Keys: per-product symmetric key; envelopes per recipient (X25519 sealed box).
 - Signatures: Ed25519 for receipts and sensitive acknowledgments.
-- Access: presigned URLs (short TTL, one-time/limited-use), JWT/PoP optional.
+- Access: short-lived claim tokens (JWT/PoP) for manifest/chunk endpoints; per-recipient download limits; rate limiting.
 - Validation: size caps, content-type allowlist/denylist, malware/moderation checks prior to grant.
 - Audit: request/actor/IP/UA logs, hashed manifests, trace IDs across batch ops.
 - Rate limiting & quotas on claim/ack/revoke endpoints.
@@ -98,13 +102,13 @@ Batch extensions (/.netlify/functions/ailock-batch):
 - Verify integrity via SHA-256 hash (and/or CID if later using IPFS).
 
 ## 12. Testing Strategy
-- Unit: crypto wrappers, policy validators, webhook handlers, presign generation, schema validators.
+- Unit: crypto wrappers, policy validators, webhook handlers, chunk orchestration (init/chunk/complete), schema validators.
 - Integration: end-to-end happy path (offer→pay→grant→claim→ack), failure cases (expired links, unpaid, wrong recipient, corrupted hash), retries/idempotency.
 - Load: uploads 200MB; download concurrency; webhook spikes.
 - Security: AV/moderation mocks, signature verification, rate limit tests.
 
 ## 13. Rollout Plan
-- Phase 1: DB migrations + feature flags + products-create/upload-init.
+- Phase 1: DB migrations + feature flags + products-create/upload-init/upload-chunk/upload-complete + download-manifest.
 - Phase 2: Stripe Checkout + webhook + grant/claim/ack + inbox integration.
 - Phase 3: Moderation/AV + revoke + disputes + analytics.
 - Phase 4 (optional): streaming video, resumable uploads, SSO storage providers; later IPFS/WebRTC.
@@ -113,7 +117,7 @@ Batch extensions (/.netlify/functions/ailock-batch):
 - Structured logs (requestId, transferId), metrics (latency, success rate, error rates), traces across batch ops.
 
 ## 15. Risks & Mitigations
-- Large file timeouts → presigned uploads, resumable (post-MVP).
+- Large file limits in Functions → chunked uploads (MVP), resumable/retry with idempotency (post-MVP).
 - Key management bugs → strong test coverage, deterministic vectors, code reviews.
 - Webhook forgery → verify Stripe signatures, idempotency keys.
 - Abuse → strict limits, CAPTCHA on suspicious flows, reputation signals.

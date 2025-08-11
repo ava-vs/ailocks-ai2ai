@@ -583,7 +583,7 @@ export const digitalProducts = pgTable('digital_products', {
   encryptionAlgo: varchar('encryption_algo', { length: 50 }).default('AES-256-GCM'),
   contentHash: varchar('content_hash', { length: 128 }).notNull(), // SHA-256 of original content
   storageType: varchar('storage_type', { length: 50 }).default('netlify_blobs'),
-  storagePointer: varchar('storage_pointer', { length: 255 }).notNull(), // blob key prefix
+  storagePointer: varchar('storage_pointer', { length: 255 }).notNull(), // blob key prefix, empty until upload completed
   manifest: jsonb('manifest'), // chunk metadata: { chunks: [{ index, hash, size }], totalChunks, chunkSize }
   createdAt: timestamp('created_at').defaultNow(),
 }, (table) => {

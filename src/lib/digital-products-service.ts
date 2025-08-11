@@ -35,7 +35,7 @@ export interface DigitalProduct {
   encryptionAlgo: string;
   contentHash: string;
   storageType: string;
-  storagePointer: string;
+  storagePointer: string; 
   manifest: ChunkManifest | null;
   createdAt: Date;
 }
@@ -166,7 +166,9 @@ export class DigitalProductsService {
       contentType,
       size,
       contentHash,
-      storagePointer: '', // Will be set during upload completion
+      encryptionAlgo: 'AES-256-GCM',
+      storageType: 'netlify_blobs',
+      storagePointer: 'pending', // Will be set during upload completion
     }).returning({ id: digitalProducts.id });
 
     return product.id;
@@ -184,10 +186,10 @@ export class DigitalProductsService {
       title: product.title,
       contentType: product.contentType,
       size: product.size,
-      encryptionAlgo: product.encryptionAlgo,
+      encryptionAlgo: product.encryptionAlgo || 'AES-256-GCM',
       contentHash: product.contentHash,
-      storageType: product.storageType,
-      storagePointer: product.storagePointer,
+      storageType: product.storageType || 'netlify_blobs',
+      storagePointer: product.storagePointer || 'pending',
       manifest: product.manifest as ChunkManifest | null,
       createdAt: product.createdAt!,
     } : null;
@@ -220,7 +222,7 @@ export class DigitalProductsService {
     }
 
     const product = await this.getProduct(productId);
-    if (!product || !product.manifest) {
+    if (!product || !product.manifest || !product.storagePointer || product.storagePointer === 'pending') {
       return null;
     }
 
