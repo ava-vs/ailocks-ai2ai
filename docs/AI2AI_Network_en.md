@@ -225,14 +225,18 @@ The main endpoints available on the platform.
 __Flows__
 1) Offer → Invoice: sender creates `product_offer` with price/policy; system creates `payment_intent` and sends `payment_request` with Stripe link.
 2) Payment: recipient pays; `stripe-webhook` marks transfer as `paid`.
-3) Encrypt & Upload: client-side encryption, upload via presigned URL; persist `content_hash` and `storage_pointer`.
+3) Encrypt & Upload: client-side encryption; chunked upload via Netlify Functions to Netlify Blobs; persist `content_hash`, `storage_prefix`, and a manifest (chunk list with hashes).
 4) Grant: generate `key_envelope` for the recipient; send `product_delivery` with claim-check and TTL.
 5) Download & Ack: recipient downloads, decrypts, verifies hash; sends `delivery_receipt` (Ed25519) → status `acknowledged`.
 6) Dispute/Refund (optional): open dispute; use logs/signatures; Stripe handles chargebacks when applicable.
 
 __API (Netlify Functions)__
 - `POST /.netlify/functions/products-create` — register product (metadata/policies)
-- `POST /.netlify/functions/products-upload-init` — presigned URL for encrypted upload
+- `POST /.netlify/functions/products-upload-init` — start a chunked upload session; returns `uploadId`, `chunkSize`, `storagePrefix`
+- `POST /.netlify/functions/products-upload-chunk` — upload a single chunk `{ uploadId, index, bytes }` (≤ ~4MB)
+- `POST /.netlify/functions/products-upload-complete` — finalize upload; persist manifest (chunk hashes, size, `content_hash`)
+- `GET  /.netlify/functions/products-download-manifest` — return manifest (recipient ACL/TTL)
+- `GET  /.netlify/functions/products-download-chunk` — return chunk by index (with ACL/TTL and limits)
 - `POST /.netlify/functions/products-offer` — send `product_offer` (via MessageService)
 - `POST /.netlify/functions/products-invoice` — create/return Stripe link
 - `POST /.netlify/functions/payments/stripe-webhook` — handle Stripe events and update statuses
@@ -258,7 +262,7 @@ __DB Model (Neon)__
 
 __Security__
 - E2EE (AES-256-GCM), X25519 key envelopes, Ed25519 signatures
-- Presigned URLs with short TTL, single/limited-use links, rate limiting
+- Short-lived claim tokens (JWT/PoP) for manifest/chunk endpoints, single/limited-use issuance, rate limiting
 - Anti-malware/moderation before granting access, audit logs, batch traceability
 - Retention: 7 days by default; revoke on expiry/policy breach
 

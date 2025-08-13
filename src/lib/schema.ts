@@ -25,6 +25,12 @@ export const originEnum = pgEnum('origin_enum', ['LOCAL', 'ESCROW']);
 export const syncDirectionEnum = pgEnum('sync_direction_enum', ['PULL', 'PUSH']);
 export const syncStatusEnum = pgEnum('sync_status_enum', ['SUCCESS', 'FAIL', 'SKIPPED']);
 
+// Digital Distribution enums
+export const transferStatusEnum = pgEnum('transfer_status_enum', ['offered', 'invoiced', 'paid', 'delivered', 'acknowledged', 'disputed', 'refunded']);
+export const paymentStatusEnum = pgEnum('payment_status_enum', ['pending', 'paid', 'failed', 'refunded']);
+export const scanStatusEnum = pgEnum('scan_status_enum', ['pending', 'clean', 'infected', 'quarantined']);
+export const moderationStatusEnum = pgEnum('moderation_status_enum', ['pending', 'approved', 'rejected', 'flagged']);
+
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
   email: varchar('email', { length: 255 }).unique().notNull(),
@@ -567,6 +573,103 @@ export const groupInvitesRelations = relations(groupInvites, ({ one }) => ({
   }),
 }));
 
+// Digital Distribution Tables
+export const digitalProducts = pgTable('digital_products', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  ownerAilockId: uuid('owner_ailock_id').references(() => ailocks.id).notNull(),
+  title: varchar('title', { length: 255 }).notNull(),
+  contentType: varchar('content_type', { length: 100 }).notNull(),
+  size: integer('size').notNull(), // bytes
+  encryptionAlgo: varchar('encryption_algo', { length: 50 }).default('AES-256-GCM'),
+  contentHash: varchar('content_hash', { length: 128 }).notNull(), // SHA-256 of original content
+  storageType: varchar('storage_type', { length: 50 }).default('netlify_blobs'),
+  storagePointer: varchar('storage_pointer', { length: 255 }).notNull(), // blob key prefix, empty until upload completed
+  manifest: jsonb('manifest'), // chunk metadata: { chunks: [{ index, hash, size }], totalChunks, chunkSize }
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => {
+  return {
+    ownerIdx: index('idx_digital_products_owner').on(table.ownerAilockId),
+    hashIdx: index('idx_digital_products_hash').on(table.contentHash),
+  };
+});
+
+export const productTransfers = pgTable('product_transfers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  productId: uuid('product_id').references(() => digitalProducts.id).notNull(),
+  fromAilockId: uuid('from_ailock_id').references(() => ailocks.id).notNull(),
+  toAilockId: uuid('to_ailock_id').references(() => ailocks.id).notNull(),
+  price: numeric('price', { precision: 10, scale: 2 }), // decimal for currency
+  currency: varchar('currency', { length: 3 }).default('USD'),
+  status: transferStatusEnum('status').default('offered'),
+  policy: jsonb('policy').default({}), // { retention: '7d', singleRecipient: true, oneTimeDownload: true }
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => {
+  return {
+    productIdx: index('idx_product_transfers_product').on(table.productId),
+    fromIdx: index('idx_product_transfers_from').on(table.fromAilockId),
+    toIdx: index('idx_product_transfers_to').on(table.toAilockId),
+    statusIdx: index('idx_product_transfers_status').on(table.status),
+  };
+});
+
+export const paymentIntents = pgTable('payment_intents', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  provider: varchar('provider', { length: 50 }).default('stripe'),
+  providerRef: varchar('provider_ref', { length: 255 }), // Stripe payment intent ID
+  amount: numeric('amount', { precision: 10, scale: 2 }).notNull(),
+  currency: varchar('currency', { length: 3 }).default('USD'),
+  status: paymentStatusEnum('status').default('pending'),
+  transferId: uuid('transfer_id').references(() => productTransfers.id).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => {
+  return {
+    transferIdx: index('idx_payment_intents_transfer').on(table.transferId),
+    providerRefIdx: index('idx_payment_intents_provider_ref').on(table.providerRef),
+  };
+});
+
+export const productKeys = pgTable('product_keys', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  productId: uuid('product_id').references(() => digitalProducts.id).notNull(),
+  recipientAilockId: uuid('recipient_ailock_id').references(() => ailocks.id).notNull(),
+  keyEnvelope: text('key_envelope').notNull(), // base64 X25519 encrypted AES key
+  algo: varchar('algo', { length: 50 }).default('X25519-AES-256-GCM'),
+  createdAt: timestamp('created_at').defaultNow(),
+  expiresAt: timestamp('expires_at').notNull(),
+}, (table) => {
+  return {
+    productRecipientIdx: index('idx_product_keys_product_recipient').on(table.productId, table.recipientAilockId),
+    expiresIdx: index('idx_product_keys_expires').on(table.expiresAt),
+  };
+});
+
+export const deliveryReceipts = pgTable('delivery_receipts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  transferId: uuid('transfer_id').references(() => productTransfers.id).notNull(),
+  clientHash: varchar('client_hash', { length: 128 }).notNull(), // recipient's hash of decrypted content
+  signature: text('signature').notNull(), // Ed25519 signature
+  deliveredAt: timestamp('delivered_at').defaultNow(),
+  meta: jsonb('meta').default({}), // additional metadata
+}, (table) => {
+  return {
+    transferIdx: index('idx_delivery_receipts_transfer').on(table.transferId),
+  };
+});
+
+export const contentChecks = pgTable('content_checks', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  productId: uuid('product_id').references(() => digitalProducts.id).notNull(),
+  malwareScan: scanStatusEnum('malware_scan').default('pending'),
+  moderation: moderationStatusEnum('moderation').default('pending'),
+  reports: jsonb('reports').default({}), // scan results, moderation notes
+  checkedAt: timestamp('checked_at').defaultNow(),
+}, (table) => {
+  return {
+    productIdx: index('idx_content_checks_product').on(table.productId),
+  };
+});
+
 export const intentSyncLogRelations = relations(intentSyncLog, ({ one }) => ({
   intent: one(intents, {
     fields: [intentSyncLog.intentId],
@@ -578,5 +681,67 @@ export const milestonesRelations = relations(milestones, ({ one }) => ({
   intent: one(intents, {
     fields: [milestones.intentId],
     references: [intents.id],
+  }),
+}));
+
+// Digital Distribution Relations
+export const digitalProductsRelations = relations(digitalProducts, ({ one, many }) => ({
+  owner: one(ailocks, {
+    fields: [digitalProducts.ownerAilockId],
+    references: [ailocks.id],
+  }),
+  transfers: many(productTransfers),
+  keys: many(productKeys),
+  contentCheck: one(contentChecks),
+}));
+
+export const productTransfersRelations = relations(productTransfers, ({ one, many }) => ({
+  product: one(digitalProducts, {
+    fields: [productTransfers.productId],
+    references: [digitalProducts.id],
+  }),
+  fromAilock: one(ailocks, {
+    fields: [productTransfers.fromAilockId],
+    references: [ailocks.id],
+    relationName: 'sentTransfers'
+  }),
+  toAilock: one(ailocks, {
+    fields: [productTransfers.toAilockId],
+    references: [ailocks.id],
+    relationName: 'receivedTransfers'
+  }),
+  paymentIntents: many(paymentIntents),
+  deliveryReceipts: many(deliveryReceipts),
+}));
+
+export const paymentIntentsRelations = relations(paymentIntents, ({ one }) => ({
+  transfer: one(productTransfers, {
+    fields: [paymentIntents.transferId],
+    references: [productTransfers.id],
+  }),
+}));
+
+export const productKeysRelations = relations(productKeys, ({ one }) => ({
+  product: one(digitalProducts, {
+    fields: [productKeys.productId],
+    references: [digitalProducts.id],
+  }),
+  recipient: one(ailocks, {
+    fields: [productKeys.recipientAilockId],
+    references: [ailocks.id],
+  }),
+}));
+
+export const deliveryReceiptsRelations = relations(deliveryReceipts, ({ one }) => ({
+  transfer: one(productTransfers, {
+    fields: [deliveryReceipts.transferId],
+    references: [productTransfers.id],
+  }),
+}));
+
+export const contentChecksRelations = relations(contentChecks, ({ one }) => ({
+  product: one(digitalProducts, {
+    fields: [contentChecks.productId],
+    references: [digitalProducts.id],
   }),
 }));

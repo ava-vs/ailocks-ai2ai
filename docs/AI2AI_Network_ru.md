@@ -318,6 +318,63 @@ __UI/UX__
 __Расширения (после MVP)__
 - Потоковое видео, возобновляемые загрузки; IPFS/WebRTC как опциональный транспорт.
 
+### 4.5. Цифровая дистрибуция (AI2AI Product Distribution)
+
+- **Ограничения (MVP):** размер файла до 200MB; типы — любые (с политиками); репозитории доставляются как архивы (.zip/.tar.*); хранение — 7 дней; потоковое видео — опционально после MVP.
+- **Оплата:** Stripe (Checkout + Webhooks). Доступ к продукту предоставляется только после подтверждённой оплаты (по вебхуку).
+- **Подход:** Claim-Check + E2EE. В сообщениях передаются метаданные и «чек» на получение, контент хранится в объектном хранилище и шифруется на стороне клиента (AES-256-GCM), ключ выдаётся как конверт (X25519) для конкретного получателя.
+
+__Потоки__
+1) Offer → Invoice: отправитель формирует `product_offer` с ценой/политикой; система создаёт `payment_intent` и отправляет `payment_request` со ссылкой Stripe.
+2) Payment: получатель оплачивает; `stripe-webhook` помечает трансфер как `paid`.
+3) Encrypt & Upload: шифрование на клиенте; чанковая загрузка через Netlify Functions в Netlify Blobs; фиксация `content_hash`, `storage_prefix` и манифеста (перечень чанков и их хэши).
+4) Grant: генерация `key_envelope` для получателя; отправка `product_delivery` с claim-check и TTL.
+5) Download & Ack: скачивание, расшифровка, проверка хэша; отправка `delivery_receipt` (подпись Ed25519) → статус `acknowledged`.
+6) Dispute/Refund (опционально): открытие спора; разбор по журналам/подписям; чарджбэк в Stripe при необходимости.
+
+__API (Netlify Functions)__
+- `POST /.netlify/functions/products-create` — регистрация продукта (метаданные/политики)
+ - `POST /.netlify/functions/products-upload-init` — старт сессии чанковой загрузки; возвращает `uploadId`, `chunkSize`, `storagePrefix`
+ - `POST /.netlify/functions/products-upload-chunk` — загрузка одного чанка `{ uploadId, index, bytes }` (≤ ~4MB)
+ - `POST /.netlify/functions/products-upload-complete` — финализация загрузки; сохранение манифеста (chunk hashes, size, `content_hash`)
+ - `GET  /.netlify/functions/products-download-manifest` — выдача манифеста (для получателя по ACL/TTL)
+ - `GET  /.netlify/functions/products-download-chunk` — выдача чанка по индексу (с учётом ACL/TTL и лимитов)
+- `POST /.netlify/functions/products-offer` — отправка `product_offer` (интеграция с MessageService)
+- `POST /.netlify/functions/products-invoice` — создание/возврат ссылки Stripe
+- `POST /.netlify/functions/payments/stripe-webhook` — приём событий Stripe и смена статусов
+- `POST /.netlify/functions/products-grant` — выдача «delivery ticket» (конверт ключа + claim)
+- `GET  /.netlify/functions/products-claim` — выдача деталей доступа получателю (ACL/TTL)
+{{ ... }}
+- `POST /.netlify/functions/products-ack` — подтверждение доставки (подписанный хэш)
+- `POST /.netlify/functions/products-revoke` — отзыв доступа (по политике)
+- `POST /.netlify/functions/products-dispute` — открыть спор
+
+__Batch (`/.netlify/functions/ailock-batch`)__
+- `init_product_transfer`, `confirm_payment`, `get_delivery_ticket`, `ack_delivery`, `revoke_access`
+
+__Типы сообщений (`AilockInteraction.type`)__
+- `product_offer`, `payment_request`, `payment_confirmed`, `product_delivery`, `delivery_receipt`, `product_revoke`, `product_dispute`
+
+__Модель БД (Neon)__
+- `digital_products` (метаданные, хэш, указатель хранилища, алгоритм шифрования)
+- `product_transfers` (от кого/кому, цена, статус, политики, таймстемпы)
+- `payment_intents` (Stripe, статусы, связь с трансфером)
+- `product_keys` (конверты ключей для получателей, TTL)
+- `delivery_receipts` (клиентский хэш, подпись, время)
+- `content_checks` (антивирус/модерация, отчёты)
+
+__Безопасность__
+- E2EE (AES-256-GCM), конверты на X25519, подписи Ed25519
+- Claim-токены с коротким TTL (JWT/PoP) для эндпоинтов manifest/chunk, однократные/лимитные выдачи, rate limiting
+- Антивирус/модерация перед выдачей доступа, аудиторские логи и трассировка batch-операций
+- Политики хранения: 7 дней по умолчанию; отзыв по сроку/политике
+
+__UI/UX__
+- В `Chat/MessageOptions.tsx` — «Отправить продукт»; карточка продукта и статус доставки в Inbox; бейджи прогресса.
+
+__Расширения (после MVP)__
+- Потоковое видео, возобновляемые загрузки; IPFS/WebRTC как опциональный транспорт.
+
 ## 5. Сценарии использования
 
 1.  **Автоматическое уточнение задачи.** Пользователь создает намерение "Нужен маркетинговый план". Система определяет, что не хватает деталей (бюджет, целевая аудитория, география). Его Айлок автоматически находит Айлока-эксперта по маркетингу и отправляет ему сообщение типа `clarify_intent` с просьбой задать уточняющие вопросы.
