@@ -574,6 +574,11 @@ export const groupInvitesRelations = relations(groupInvites, ({ one }) => ({
 }));
 
 // Digital Distribution Tables
+// Создаем перечисления для статуса продукта и типа лицензии
+export const productStatusEnum = pgEnum('product_status_enum', ['draft', 'published', 'archived', 'suspended']);
+export const licenseTypeEnum = pgEnum('license_type_enum', ['single_use', 'multi_use', 'unlimited', 'subscription', 'enterprise']);
+export const discountTypeEnum = pgEnum('discount_type_enum', ['percentage', 'fixed_amount', 'buy_x_get_y']);
+
 export const digitalProducts = pgTable('digital_products', {
   id: uuid('id').defaultRandom().primaryKey(),
   ownerAilockId: uuid('owner_ailock_id').references(() => ailocks.id).notNull(),
@@ -586,10 +591,41 @@ export const digitalProducts = pgTable('digital_products', {
   storagePointer: varchar('storage_pointer', { length: 255 }).notNull(), // blob key prefix, empty until upload completed
   manifest: jsonb('manifest'), // chunk metadata: { chunks: [{ index, hash, size }], totalChunks, chunkSize }
   createdAt: timestamp('created_at').defaultNow(),
+  
+  // Расширенные поля из миграции 0013_enhance_digital_products.sql
+  description: text('description'),
+  shortDescription: varchar('short_description', { length: 500 }),
+  price: numeric('price', { precision: 10, scale: 2 }).default('0'),
+  currency: varchar('currency', { length: 3 }).default('USD'),
+  status: productStatusEnum('status').default('draft'),
+  category: varchar('category', { length: 100 }),
+  tags: text('tags').array(),
+  licenseType: licenseTypeEnum('license_type').default('single_use'),
+  licenseTerms: text('license_terms'),
+  previewContent: text('preview_content'),
+  thumbnailUrl: varchar('thumbnail_url', { length: 500 }),
+  demoUrl: varchar('demo_url', { length: 500 }),
+  version: varchar('version', { length: 20 }).default('1.0.0'),
+  changelog: jsonb('changelog').default('[]'),
+  requirements: jsonb('requirements').default('{}'),
+  seoTitle: varchar('seo_title', { length: 255 }),
+  seoDescription: varchar('seo_description', { length: 500 }),
+  seoKeywords: text('seo_keywords').array(),
+  downloadCount: integer('download_count').default(0),
+  ratingAverage: numeric('rating_average', { precision: 3, scale: 2 }).default('0'),
+  ratingCount: integer('rating_count').default(0),
+  featured: boolean('featured').default(false),
+  publishedAt: timestamp('published_at'),
+  updatedAt: timestamp('updated_at').default(new Date()),
 }, (table) => {
   return {
     ownerIdx: index('idx_digital_products_owner').on(table.ownerAilockId),
     hashIdx: index('idx_digital_products_hash').on(table.contentHash),
+    statusIdx: index('idx_digital_products_status').on(table.status),
+    categoryIdx: index('idx_digital_products_category').on(table.category),
+    priceIdx: index('idx_digital_products_price').on(table.price),
+    featuredIdx: index('idx_digital_products_featured').on(table.featured),
+    publishedAtIdx: index('idx_digital_products_published_at').on(table.publishedAt),
   };
 });
 

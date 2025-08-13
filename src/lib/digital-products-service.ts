@@ -158,19 +158,89 @@ export class DigitalProductsService {
     title: string,
     contentType: string,
     size: number,
-    contentHash: string
+    contentHash: string,
+    // Расширенные поля продукта
+    description?: string,
+    shortDescription?: string,
+    price?: string | number, // Может быть строкой или числом для numeric в БД
+    currency?: string,
+    status?: string,
+    category?: string,
+    tags?: string[],
+    licenseType?: string,
+    licenseTerms?: string,
+    previewContent?: string,
+    thumbnailUrl?: string,
+    demoUrl?: string,
+    version?: string,
+    changelog?: any,
+    requirements?: any,
+    seoTitle?: string,
+    seoDescription?: string,
+    seoKeywords?: string[],
+    featured?: boolean,
+    policy?: any
   ): Promise<string> {
-    const [product] = await db.insert(digitalProducts).values({
+    // Создаем объект, соответствующий схеме digitalProducts
+    // Обязательные поля
+    const insertValues = {
       ownerAilockId,
       title,
       contentType,
       size,
       contentHash,
-      encryptionAlgo: 'AES-256-GCM',
-      storageType: 'netlify_blobs',
+      encryptionAlgo: 'AES-256-GCM' as const,
+      storageType: 'netlify_blobs' as const,
       storagePointer: 'pending', // Will be set during upload completion
-    }).returning({ id: digitalProducts.id });
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
 
+    // Добавляем опциональные поля, если они предоставлены
+    // Используем частичный тип для опциональных полей
+    const optionalFields: Partial<typeof digitalProducts.$inferInsert> = {};
+
+    if (description !== undefined) optionalFields.description = description;
+    if (shortDescription !== undefined) optionalFields.shortDescription = shortDescription;
+    
+    // Преобразуем price в строку для numeric типа в БД
+    if (price !== undefined) optionalFields.price = String(price);
+    
+    if (currency !== undefined) optionalFields.currency = currency;
+    if (status !== undefined) optionalFields.status = status as any; // Используем as any для совместимости с enum
+    if (category !== undefined) optionalFields.category = category;
+    if (tags !== undefined && Array.isArray(tags)) optionalFields.tags = tags;
+    if (licenseType !== undefined) optionalFields.licenseType = licenseType as any; // Используем as any для совместимости с enum
+    if (licenseTerms !== undefined) optionalFields.licenseTerms = licenseTerms;
+    if (previewContent !== undefined) optionalFields.previewContent = previewContent;
+    if (thumbnailUrl !== undefined) optionalFields.thumbnailUrl = thumbnailUrl;
+    if (demoUrl !== undefined) optionalFields.demoUrl = demoUrl;
+    if (version !== undefined) optionalFields.version = version;
+    
+    // JSON поля
+    if (changelog !== undefined) optionalFields.changelog = changelog;
+    if (requirements !== undefined) optionalFields.requirements = requirements;
+    
+    // SEO поля
+    if (seoTitle !== undefined) optionalFields.seoTitle = seoTitle;
+    if (seoDescription !== undefined) optionalFields.seoDescription = seoDescription;
+    if (seoKeywords !== undefined && Array.isArray(seoKeywords)) optionalFields.seoKeywords = seoKeywords;
+    if (featured !== undefined) optionalFields.featured = featured;
+    
+    // Добавляем дату публикации, если статус published
+    if (status === 'published') optionalFields.publishedAt = new Date();
+
+    // Объединяем обязательные и опциональные поля
+    const fullInsertValues = {
+      ...insertValues,
+      ...optionalFields
+    };
+
+    // Выполняем вставку с подготовленными данными
+    const [product] = await db.insert(digitalProducts)
+      .values(fullInsertValues)
+      .returning({ id: digitalProducts.id });
+      
     return product.id;
   }
 

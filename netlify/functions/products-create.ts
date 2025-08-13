@@ -59,6 +59,26 @@ export const handler: Handler = async (event) => {
       contentType, 
       size, 
       contentHash,
+      // Расширенные поля продукта
+      description,
+      shortDescription,
+      price,
+      currency,
+      status,
+      category,
+      tags,
+      licenseType,
+      licenseTerms,
+      previewContent,
+      thumbnailUrl,
+      demoUrl,
+      version,
+      changelog,
+      requirements,
+      seoTitle,
+      seoDescription,
+      seoKeywords,
+      featured,
       policy = {}
     } = JSON.parse(event.body);
 
@@ -118,7 +138,14 @@ export const handler: Handler = async (event) => {
       title, 
       contentType, 
       size,
-      userId: payload.sub 
+      userId: payload.sub,
+      // Добавляем расширенные поля в лог
+      description: description ? 'Указано' : 'Не указано',
+      shortDescription: shortDescription ? 'Указано' : 'Не указано',
+      price: price || 'Не указана',
+      status: status || 'draft',
+      category: category || 'Не указана',
+      licenseType: licenseType || 'single_use'
     });
 
     // Create product record (without actual file data yet)
@@ -127,7 +154,28 @@ export const handler: Handler = async (event) => {
       title,
       contentType,
       size,
-      contentHash
+      contentHash,
+      // Передаем расширенные поля продукта
+      description,
+      shortDescription,
+      price,
+      currency,
+      status,
+      category,
+      tags,
+      licenseType,
+      licenseTerms,
+      previewContent,
+      thumbnailUrl,
+      demoUrl,
+      version,
+      changelog,
+      requirements,
+      seoTitle,
+      seoDescription,
+      seoKeywords,
+      featured,
+      policy
     );
 
     console.log('Product created successfully:', { productId });
@@ -142,6 +190,26 @@ export const handler: Handler = async (event) => {
         contentType,
         size,
         contentHash,
+        // Добавляем расширенные поля в ответ
+        description,
+        shortDescription,
+        price,
+        currency,
+        status: status || 'draft',
+        category,
+        tags,
+        licenseType: licenseType || 'single_use',
+        licenseTerms,
+        previewContent,
+        thumbnailUrl,
+        demoUrl,
+        version,
+        changelog,
+        requirements,
+        seoTitle,
+        seoDescription,
+        seoKeywords,
+        featured,
         message: 'Product created successfully. Use upload-init to begin file upload.'
       })
     };

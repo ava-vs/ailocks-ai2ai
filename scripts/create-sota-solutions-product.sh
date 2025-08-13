@@ -40,7 +40,7 @@ fi
 # Извлечение токена доступа
 TEMP_FILE="temp_login_response.json"
 echo "${LOGIN_BODY}" > "${TEMP_FILE}"
-ACCESS_TOKEN=$(powershell.exe -Command "(Get-Content -Raw '${TEMP_FILE}' | ConvertFrom-Json).accessToken")
+ACCESS_TOKEN=$(powershell.exe -Command "(Get-Content -Raw '${TEMP_FILE}' | ConvertFrom-Json).token")
 rm "${TEMP_FILE}"
 
 # Очистка возможных символов возврата каретки
@@ -55,34 +55,38 @@ fi
 echo "Успешный вход. Токен получен." | tee -a "${LOG_FILE}"
 echo "------------------------------------" | tee -a "${LOG_FILE}"
 
-# --- Шаг 2: Получение ownerAilockId пользователя --- #
-echo "Получение информации о пользователе и его Ailock ID..." | tee -a "${LOG_FILE}"
+## --- Step 2: Get Ailock ID --- #
+echo "Getting ailock ID..." | tee -a "${LOG_FILE}"
 
-USER_RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "${BASE_URL}/.netlify/functions/user-profile" \
+AILOCK_RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "${BASE_URL}/.netlify/functions/get-ailock-id" \
      -H "Authorization: Bearer ${ACCESS_TOKEN}")
 
-USER_STATUS=$(echo "$USER_RESPONSE" | tail -n1)
-USER_BODY=$(echo "$USER_RESPONSE" | sed '$d')
 
-echo "Статус получения пользователя: ${USER_STATUS}" | tee -a "${LOG_FILE}"
+# Extract status code and body
+AILOCK_STATUS=$(echo "$AILOCK_RESPONSE" | tail -n1)
+AILOCK_BODY=$(echo "$AILOCK_RESPONSE" | sed '$d')
 
-if [ "$USER_STATUS" -ne 200 ]; then
-  echo "Ошибка получения данных пользователя. Используем тестовый Ailock ID." | tee -a "${LOG_FILE}"
-  OWNER_AILOCK_ID="550e8400-e29b-41d4-a716-446655440000"
-else
-  # Извлечение Ailock ID из ответа
-  TEMP_FILE="temp_user_response.json"
-  echo "${USER_BODY}" > "${TEMP_FILE}"
-  OWNER_AILOCK_ID=$(powershell.exe -Command "(Get-Content -Raw '${TEMP_FILE}' | ConvertFrom-Json).ailock.id")
-  rm "${TEMP_FILE}"
-  
-  # Очистка возможных символов возврата каретки
-  OWNER_AILOCK_ID=$(echo "${OWNER_AILOCK_ID}" | tr -d '\r')
+echo "Get Ailock Response Status: ${AILOCK_STATUS}" | tee -a "${LOG_FILE}"
+
+if [ "$AILOCK_STATUS" -ne 200 ]; then
+  echo "Failed to get ailock ID. Exiting." | tee -a "${LOG_FILE}"
+  echo "Response: ${AILOCK_BODY}" | tee -a "${LOG_FILE}"
+  exit 1
 fi
 
+# Extract ailock ID
+TEMP_FILE="temp_ailock_response.json"
+echo "${AILOCK_BODY}" > "${TEMP_FILE}"
+OWNER_AILOCK_ID=$(powershell.exe -Command "(Get-Content -Raw '${TEMP_FILE}' | ConvertFrom-Json).ailockId")
+rm "${TEMP_FILE}"
+
+# Очистка возможных символов возврата каретки
+OWNER_AILOCK_ID=$(echo "${OWNER_AILOCK_ID}" | tr -d '\r')
+
 if [ -z "${OWNER_AILOCK_ID}" ]; then
-    echo "Не удалось получить Ailock ID. Используем тестовый ID." | tee -a "${LOG_FILE}"
-    OWNER_AILOCK_ID="550e8400-e29b-41d4-a716-446655440000"
+    echo "Failed to extract ailock ID from response:" | tee -a "${LOG_FILE}"
+    echo "${AILOCK_BODY}" | tee -a "${LOG_FILE}"
+    exit 1
 fi
 
 echo "Owner Ailock ID: ${OWNER_AILOCK_ID}" | tee -a "${LOG_FILE}"
@@ -99,16 +103,16 @@ PRODUCT_PAYLOAD=$(cat <<EOF
 {
   "ownerAilockId": "${OWNER_AILOCK_ID}",
   "title": "SotA Solutions",
-  "description": "Предлагаем для вашей проблемы подбор оптимального решения, основанного на наилучших известных подходах и практиках",
-  "shortDescription": "Подбор оптимальных решений на основе лучших практик",
-  "price": 99.00,
+  "description": "Best solution selection based on proven approaches",
+  "shortDescription": "Optimal solutions based on best practices",
+  "price": "99.00",
   "currency": "USD",
   "status": "published",
   "category": "solutions",
   "tags": ["solutions", "best-practices", "optimization", "consulting"],
   "licenseType": "single_use",
-  "licenseTerms": "Однократное использование решения для одного проекта. Передача третьим лицам запрещена.",
-  "previewContent": "Демонстрационный контент: анализ проблемы -> подбор решений -> рекомендации по внедрению",
+  "licenseTerms": "Single use license for one project only",
+  "previewContent": "Demo content: problem analysis -> solution selection -> implementation recommendations",
   "version": "1.0.0",
   "contentType": "application/json",
   "size": 2048576,
@@ -118,9 +122,9 @@ PRODUCT_PAYLOAD=$(cat <<EOF
     "timeToImplement": "1-2 weeks",
     "supportedPlatforms": ["web", "mobile", "desktop"]
   },
-  "seoTitle": "SotA Solutions - Оптимальные решения для вашего бизнеса",
-  "seoDescription": "Получите подборку лучших решений для вашей задачи, основанных на проверенных практиках и современных подходах",
-  "seoKeywords": ["решения", "практики", "оптимизация", "консалтинг", "sota"],
+  "seoTitle": "SotA Solutions - Optimal solutions for your business",
+  "seoDescription": "Get the best solutions for your tasks based on proven practices",
+  "seoKeywords": ["solutions", "practices", "optimization", "consulting", "sota"],
   "featured": true,
   "policy": {
     "allowDownload": true,
@@ -131,7 +135,7 @@ PRODUCT_PAYLOAD=$(cat <<EOF
     {
       "version": "1.0.0",
       "date": "2025-01-13",
-      "changes": ["Первый релиз продукта", "Базовая функциональность подбора решений"]
+      "changes": ["First product release", "Basic solution selection functionality"]
     }
   ]
 }
