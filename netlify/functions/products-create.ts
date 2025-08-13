@@ -59,7 +59,6 @@ export const handler: Handler = async (event) => {
       contentType, 
       size, 
       contentHash,
-      // Расширенные поля продукта
       description,
       shortDescription,
       price,
@@ -139,12 +138,11 @@ export const handler: Handler = async (event) => {
       contentType, 
       size,
       userId: payload.sub,
-      // Добавляем расширенные поля в лог
-      description: description ? 'Указано' : 'Не указано',
-      shortDescription: shortDescription ? 'Указано' : 'Не указано',
-      price: price || 'Не указана',
+      description: description || '',
+      shortDescription: shortDescription || '',
+      price: price || 0,
       status: status || 'draft',
-      category: category || 'Не указана',
+      category: category || '',
       licenseType: licenseType || 'single_use'
     });
 
@@ -155,7 +153,6 @@ export const handler: Handler = async (event) => {
       contentType,
       size,
       contentHash,
-      // Передаем расширенные поля продукта
       description,
       shortDescription,
       price,
@@ -190,7 +187,6 @@ export const handler: Handler = async (event) => {
         contentType,
         size,
         contentHash,
-        // Добавляем расширенные поля в ответ
         description,
         shortDescription,
         price,
