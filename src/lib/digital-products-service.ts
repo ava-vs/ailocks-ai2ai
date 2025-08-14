@@ -191,6 +191,7 @@ export class DigitalProductsService {
       contentHash,
       encryptionAlgo: 'AES-256-GCM' as const,
       storageType: 'netlify_blobs' as const,
+      storageRef: 'pending', // Will be set during upload completion
       storagePointer: 'pending', // Will be set during upload completion
       createdAt: new Date(),
       updatedAt: new Date()
@@ -245,12 +246,29 @@ export class DigitalProductsService {
   }
 
   async getProduct(productId: string): Promise<DigitalProduct | null> {
-    const [product] = await db.select()
+    const [product] = await db.select({
+      id: digitalProducts.id,
+      ownerAilockId: digitalProducts.ownerAilockId,
+      title: digitalProducts.title,
+      contentType: digitalProducts.contentType,
+      size: digitalProducts.size,
+      encryptionAlgo: digitalProducts.encryptionAlgo,
+      contentHash: digitalProducts.contentHash,
+      storageType: digitalProducts.storageType,
+      storagePointer: digitalProducts.storagePointer,
+      manifest: digitalProducts.manifest,
+      price: digitalProducts.price,
+      currency: digitalProducts.currency,
+      status: digitalProducts.status,
+      createdAt: digitalProducts.createdAt
+    })
       .from(digitalProducts)
       .where(eq(digitalProducts.id, productId))
       .limit(1);
 
-    return product ? {
+    if (!product) return null;
+    
+    return {
       id: product.id,
       ownerAilockId: product.ownerAilockId,
       title: product.title,
@@ -261,8 +279,8 @@ export class DigitalProductsService {
       storageType: product.storageType || 'netlify_blobs',
       storagePointer: product.storagePointer || 'pending',
       manifest: product.manifest as ChunkManifest | null,
-      createdAt: product.createdAt!,
-    } : null;
+      createdAt: product.createdAt || new Date(),
+    };
   }
 
   // Chunked Download
@@ -315,8 +333,11 @@ export class DigitalProductsService {
       return true;
     }
 
-    // Check if there's a valid paid transfer
-    const [transfer] = await db.select()
+    // Check if there's a valid transfer (paid or claimed)
+    const [transfer] = await db.select({
+      id: productTransfers.id,
+      status: productTransfers.status
+    })
       .from(productTransfers)
       .where(
         and(
@@ -328,11 +349,17 @@ export class DigitalProductsService {
       .limit(1);
 
     if (!transfer) {
+      console.log(`No valid transfer found for product ${productId} and user ${ailockId}`);
       return false;
     }
 
+    console.log(`Found valid transfer with status ${transfer.status} for product ${productId} and user ${ailockId}`);
+
     // Check if there's a valid key envelope
-    const [key] = await db.select()
+    const [key] = await db.select({
+      id: productKeys.id,
+      expiresAt: productKeys.expiresAt
+    })
       .from(productKeys)
       .where(
         and(
@@ -342,7 +369,10 @@ export class DigitalProductsService {
       )
       .limit(1);
 
-    return !!key && new Date(key.expiresAt) > new Date();
+    const keyValid = !!key && new Date(key.expiresAt) > new Date();
+    console.log(`Key validation result: ${keyValid ? 'valid' : 'invalid'} for product ${productId} and user ${ailockId}`);
+    
+    return keyValid;
   }
 
   // Transfer Management

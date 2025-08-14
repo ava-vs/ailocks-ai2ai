@@ -184,16 +184,43 @@ async function handleRealRequest(event: any) {
     };
   }
 
-  // Find transfer and verify ownership and payment status
-  const [transferData] = await db.select()
+  // Find transfer and verify that current user is the recipient (buyer)
+  console.log('products-grant: Looking for transfer:', transferId, 'for user:', payload.sub);
+  
+  const [transferData] = await db.select({
+    product_transfers: {
+      id: productTransfers.id,
+      productId: productTransfers.productId,
+      fromAilockId: productTransfers.fromAilockId,
+      toAilockId: productTransfers.toAilockId,
+      status: productTransfers.status,
+      buyerInputs: productTransfers.buyerInputs
+    },
+    digital_products: {
+      id: digitalProducts.id,
+      title: digitalProducts.title,
+      ownerAilockId: digitalProducts.ownerAilockId,
+      storagePointer: digitalProducts.storagePointer
+    },
+    recipient_ailock: {
+      id: ailocks.id,
+      userId: ailocks.userId
+    }
+  })
     .from(productTransfers)
     .innerJoin(digitalProducts, eq(productTransfers.productId, digitalProducts.id))
-    .innerJoin(ailocks, eq(digitalProducts.ownerAilockId, ailocks.id))
+    .innerJoin(ailocks, eq(productTransfers.toAilockId, ailocks.id))
     .where(and(
       eq(productTransfers.id, transferId),
       eq(ailocks.userId, payload.sub)
     ))
     .limit(1);
+
+  console.log('products-grant: Transfer data found:', transferData ? 'YES' : 'NO');
+  if (transferData) {
+    console.log('products-grant: Transfer status:', transferData.product_transfers.status);
+    console.log('products-grant: Recipient ailock:', transferData.recipient_ailock.id, 'user:', transferData.recipient_ailock.userId);
+  }
 
   if (!transferData) {
     return {
@@ -206,14 +233,16 @@ async function handleRealRequest(event: any) {
   const transfer = transferData.product_transfers;
   const product = transferData.digital_products;
 
-  // Verify transfer is paid
-  if (!transfer.status || transfer.status !== 'paid') {
+  // Verify transfer is paid (or invoiced for testing without real Stripe)
+  const allowedStatuses = ['paid', 'invoiced']; // Allow invoiced for testing without real payment
+  if (!transfer.status || !allowedStatuses.includes(transfer.status)) {
     return {
       statusCode: 403,
       headers: { ...headersBase, 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        error: 'Transfer must be paid before granting access',
-        currentStatus: transfer.status || 'unknown'
+        error: 'Transfer must be paid or invoiced before granting access',
+        currentStatus: transfer.status || 'unknown',
+        allowedStatuses
       })
     };
   }

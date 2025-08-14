@@ -98,36 +98,81 @@ async function handleMockRequest(event: any) {
 
 // Real implementation with database and storage
 async function handleRealRequest(event: any) {
-  // Authentication
+  // Get claim token from query parameter (primary method)
+  const claimToken = event.queryStringParameters?.claim;
+  
+  // Fallback to other authentication methods
   const token = getAuthTokenFromHeaders(event.headers);
-  if (!token) {
+  
+  if (!claimToken && !token) {
     return {
       statusCode: 401,
       headers: { ...headersBase, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Authentication required' })
+      body: JSON.stringify({ error: 'Authentication required (claim token or bearer token)' })
     };
   }
 
-  const payload = verifyToken(token);
-  if (!payload) {
-    return {
-      statusCode: 401,
-      headers: { ...headersBase, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Invalid token' })
-    };
+  let payload: any;
+  let productId: string;
+  let requestingAilockId: string;
+
+  if (claimToken) {
+    // Verify claim token and extract product/ailock info
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      throw new Error('JWT_SECRET not configured');
+    }
+
+    try {
+      const jwt = require('jsonwebtoken');
+      payload = jwt.verify(claimToken, jwtSecret);
+      if (payload.type !== 'claim') {
+        throw new Error('Invalid token type');
+      }
+      productId = payload.productId;
+      requestingAilockId = payload.recipientAilockId;
+    } catch (error) {
+      return {
+        statusCode: 401,
+        headers: { ...headersBase, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Invalid claim token' })
+      };
+    }
+  } else {
+    // Verify regular Bearer token and extract from query params
+    payload = verifyToken(token!);
+    if (!payload) {
+      return {
+        statusCode: 401,
+        headers: { ...headersBase, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Invalid token' })
+      };
+    }
+    
+    // Extract parameters from query string
+    productId = event.queryStringParameters?.productId;
+    requestingAilockId = event.queryStringParameters?.ailockId;
+
+    if (!productId || !requestingAilockId) {
+      return {
+        statusCode: 400,
+        headers: { ...headersBase, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          error: 'Missing required query parameters: productId, ailockId' 
+        })
+      };
+    }
   }
 
-  // Extract parameters from query string
-  const productId = event.queryStringParameters?.productId;
-  const chunkIndexStr = event.queryStringParameters?.chunkIndex;
-  const requestingAilockId = event.queryStringParameters?.ailockId;
-
-  if (!productId || !chunkIndexStr || !requestingAilockId) {
+  // Extract chunk index (works for both claim and bearer token methods)
+  const chunkIndexStr = event.queryStringParameters?.chunkIndex || event.queryStringParameters?.index;
+  
+  if (!chunkIndexStr) {
     return {
       statusCode: 400,
       headers: { ...headersBase, 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        error: 'Missing required query parameters: productId, chunkIndex, ailockId' 
+        error: 'Missing required query parameter: chunkIndex or index' 
       })
     };
   }
@@ -169,16 +214,16 @@ async function handleRealRequest(event: any) {
     chunkSize: chunkData.length 
   });
 
-  // Return chunk data as base64
+  // Return chunk data as binary
   return {
     statusCode: 200,
-    headers: { ...headersBase, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      productId,
-      chunkIndex,
-      chunkData: chunkData.toString('base64'),
-      chunkSize: chunkData.length,
-      message: 'Chunk downloaded successfully'
-    })
+    headers: { 
+      ...headersBase, 
+      'Content-Type': 'application/octet-stream',
+      'Content-Length': chunkData.length.toString(),
+      'Content-Disposition': `attachment; filename="chunk-${chunkIndex}.bin"`
+    },
+    body: chunkData.toString('base64'),
+    isBase64Encoded: true
   };
 }

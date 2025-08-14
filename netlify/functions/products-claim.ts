@@ -191,7 +191,12 @@ async function handleRealRequest(event: any) {
   const { transferId, productId, recipientAilockId, keyId } = claimPayload;
 
   // Verify transfer exists and is in delivered status
-  const [transfer] = await db.select()
+  const [transfer] = await db.select({
+    id: productTransfers.id,
+    productId: productTransfers.productId,
+    toAilockId: productTransfers.toAilockId,
+    status: productTransfers.status
+  })
     .from(productTransfers)
     .where(and(
       eq(productTransfers.id, transferId),
@@ -220,7 +225,15 @@ async function handleRealRequest(event: any) {
   }
 
   // Get product details
-  const [product] = await db.select()
+  const [product] = await db.select({
+    id: digitalProducts.id,
+    title: digitalProducts.title,
+    size: digitalProducts.size,
+    contentType: digitalProducts.contentType,
+    manifest: digitalProducts.manifest,
+    storagePointer: digitalProducts.storagePointer,
+    storageType: digitalProducts.storageType
+  })
     .from(digitalProducts)
     .where(eq(digitalProducts.id, productId))
     .limit(1);

@@ -201,7 +201,20 @@ async function handleRealRequest(event: any) {
   }
 
   // Find transfer and verify it belongs to the authenticated user (recipient)
-  const [transferData] = await db.select()
+  const [transferData] = await db.select({
+    product_transfers: {
+      id: productTransfers.id,
+      status: productTransfers.status,
+      productId: productTransfers.productId
+    },
+    digital_products: {
+      id: digitalProducts.id
+    },
+    ailocks: {
+      id: ailocks.id,
+      userId: ailocks.userId
+    }
+  })
     .from(productTransfers)
     .innerJoin(digitalProducts, eq(productTransfers.productId, digitalProducts.id))
     .innerJoin(ailocks, eq(productTransfers.toAilockId, ailocks.id))
@@ -265,7 +278,11 @@ async function handleRealRequest(event: any) {
     clientHash,
     signature,
     meta: meta || {},
-  }).returning();
+    deliveredAt: new Date()
+  }).returning({ 
+    id: deliveryReceipts.id,
+    deliveredAt: deliveryReceipts.deliveredAt
+  });
 
   // Update transfer status to acknowledged
   await db.update(productTransfers)

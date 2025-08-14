@@ -588,9 +588,7 @@ export const digitalProducts = pgTable('digital_products', {
   encryptionAlgo: varchar('encryption_algo', { length: 50 }).default('AES-256-GCM'),
   contentHash: varchar('content_hash', { length: 128 }).notNull(), // SHA-256 of original content
   storageType: varchar('storage_type', { length: 50 }).default('netlify_blobs'),
-  storagePointer: varchar('storage_pointer', { length: 255 }).notNull(), // blob key prefix, empty until upload completed
-  manifest: jsonb('manifest'), // chunk metadata: { chunks: [{ index, hash, size }], totalChunks, chunkSize }
-  createdAt: timestamp('created_at').defaultNow(),
+  storageRef: varchar('storage_ref', { length: 255 }).notNull(), // blob key or file path
   
   // Расширенные поля из миграции 0013_enhance_digital_products.sql
   description: text('description'),
@@ -616,7 +614,15 @@ export const digitalProducts = pgTable('digital_products', {
   ratingCount: integer('rating_count').default(0),
   featured: boolean('featured').default(false),
   publishedAt: timestamp('published_at'),
+  createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').default(new Date()),
+  
+  // Storage and manifest fields
+  storagePointer: varchar('storage_pointer', { length: 255 }), // pointer to storage location
+  manifest: jsonb('manifest'), // chunk manifest for downloads
+  
+  // Required inputs for buyer data collection
+  requiredInputs: jsonb('required_inputs').default('[]'), // [{ name, type, timing, required, description }]
 }, (table) => {
   return {
     ownerIdx: index('idx_digital_products_owner').on(table.ownerAilockId),
@@ -638,6 +644,7 @@ export const productTransfers = pgTable('product_transfers', {
   currency: varchar('currency', { length: 3 }).default('USD'),
   status: transferStatusEnum('status').default('offered'),
   policy: jsonb('policy').default({}), // { retention: '7d', singleRecipient: true, oneTimeDownload: true }
+  buyerInputs: jsonb('buyer_inputs').default('{}'), // collected buyer data: { field_name: value_or_attachment_ref }
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => {

@@ -113,21 +113,48 @@ async function handleMockRequest(event: any) {
 
 // Real implementation with database and storage
 async function handleRealRequest(event: any) {
-  // Authentication - can use either Bearer token or download token from claim
+  // Get claim token from query parameter (primary method)
+  const claimToken = event.queryStringParameters?.claim;
+  
+  // Fallback to other authentication methods
   const token = getAuthTokenFromHeaders(event.headers);
   const downloadToken = event.headers['x-download-token'] || 
                        event.queryStringParameters?.downloadToken;
 
-  if (!token && !downloadToken) {
+  if (!claimToken && !token && !downloadToken) {
     return {
       statusCode: 401,
       headers: { ...headersBase, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Authentication required' })
+      body: JSON.stringify({ error: 'Authentication required (claim token, bearer token, or download token)' })
     };
   }
 
   let payload: any;
-  if (downloadToken) {
+  let productId: string;
+  let requestingAilockId: string;
+
+  if (claimToken) {
+    // Verify claim token and extract product/ailock info
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      throw new Error('JWT_SECRET not configured');
+    }
+
+    try {
+      payload = jwt.verify(claimToken, jwtSecret);
+      if (payload.type !== 'claim') {
+        throw new Error('Invalid token type');
+      }
+      productId = payload.productId;
+      requestingAilockId = payload.recipientAilockId;
+    } catch (error) {
+      return {
+        statusCode: 401,
+        headers: { ...headersBase, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Invalid claim token' })
+      };
+    }
+  } else if (downloadToken) {
     // Verify download token
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) {
@@ -139,6 +166,8 @@ async function handleRealRequest(event: any) {
       if (payload.type !== 'download') {
         throw new Error('Invalid token type');
       }
+      productId = payload.productId;
+      requestingAilockId = payload.recipientAilockId;
     } catch (error) {
       return {
         statusCode: 401,
@@ -147,7 +176,7 @@ async function handleRealRequest(event: any) {
       };
     }
   } else {
-    // Verify regular Bearer token
+    // Verify regular Bearer token and extract from query params
     payload = verifyToken(token!);
     if (!payload) {
       return {
@@ -156,20 +185,20 @@ async function handleRealRequest(event: any) {
         body: JSON.stringify({ error: 'Invalid token' })
       };
     }
-  }
+    
+    // Extract parameters from query string
+    productId = event.queryStringParameters?.productId;
+    requestingAilockId = event.queryStringParameters?.ailockId;
 
-  // Extract parameters
-  const productId = event.queryStringParameters?.productId;
-  const requestingAilockId = event.queryStringParameters?.ailockId;
-
-  if (!productId || !requestingAilockId) {
-    return {
-      statusCode: 400,
-      headers: { ...headersBase, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        error: 'Missing required query parameters: productId, ailockId' 
-      })
-    };
+    if (!productId || !requestingAilockId) {
+      return {
+        statusCode: 400,
+        headers: { ...headersBase, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          error: 'Missing required query parameters: productId, ailockId' 
+        })
+      };
+    }
   }
 
   console.log('Products download manifest:', { 
