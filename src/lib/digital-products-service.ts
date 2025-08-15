@@ -1,4 +1,4 @@
-import { getDeployStore, Store } from '@netlify/blobs';
+import { getDeployStore, getStore, Store } from '@netlify/blobs';
 import { db } from './db';
 import { digitalProducts, productTransfers, productKeys, paymentIntents, deliveryReceipts, contentChecks } from './schema';
 import { eq, and } from 'drizzle-orm';
@@ -56,10 +56,28 @@ export interface ProductTransfer {
 export class DigitalProductsService {
   private getStoreInstance(storeName: string = 'digital-products'): Store {
     try {
+      // Try getDeployStore first (works in most Netlify environments)
       return getDeployStore(storeName);
     } catch (error) {
-      console.error('Failed to initialize Netlify Blobs store:', error);
-      throw new Error('Blob storage unavailable');
+      console.error('getDeployStore failed, trying manual configuration:', error);
+      
+      // Fallback: use getStore with explicit deployID from environment
+      const deployID = process.env.NETLIFY_DEPLOY_ID || process.env.deployID;
+      
+      if (!deployID) {
+        console.error('No deployID found in environment variables');
+        throw new Error('Blob storage unavailable: missing deployID');
+      }
+      
+      try {
+        return getStore({
+          name: storeName,
+          deployID: deployID
+        });
+      } catch (fallbackError) {
+        console.error('Failed to initialize Netlify Blobs store with manual config:', fallbackError);
+        throw new Error('Blob storage unavailable');
+      }
     }
   }
 

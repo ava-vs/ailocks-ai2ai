@@ -1,4 +1,4 @@
-import { getDeployStore, Store } from '@netlify/blobs';
+import { getDeployStore, getStore, Store } from '@netlify/blobs';
 
 export interface ChatContext {
   sessionId: string;
@@ -31,10 +31,28 @@ export class ChatBlobService {
     // This function will be called from within the Netlify function handlers,
     // ensuring the execution context is available.
     try {
+      // Try getDeployStore first (works in most Netlify environments)
       return getDeployStore('chat-contexts');
     } catch (error) {
-      console.error('Failed to initialize Netlify Blobs store:', error);
-      throw new Error('Blob storage unavailable');
+      console.error('getDeployStore failed, trying manual configuration:', error);
+      
+      // Fallback: use getStore with explicit deployID from environment
+      const deployID = process.env.NETLIFY_DEPLOY_ID || process.env.deployID;
+      
+      if (!deployID) {
+        console.error('No deployID found in environment variables');
+        throw new Error('Blob storage unavailable: missing deployID');
+      }
+      
+      try {
+        return getStore({
+          name: 'chat-contexts',
+          deployID: deployID
+        });
+      } catch (fallbackError) {
+        console.error('Failed to initialize Netlify Blobs store with manual config:', fallbackError);
+        throw new Error('Blob storage unavailable');
+      }
     }
   }
 
