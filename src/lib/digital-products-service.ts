@@ -55,12 +55,58 @@ export interface ProductTransfer {
 
 export class DigitalProductsService {
   private getStoreInstance(storeName: string = 'digital-products'): Store {
-    try {
-      return getStore(storeName);
-    } catch (error) {
-      console.error('Failed to initialize Netlify Blobs store:', error);
-      throw new Error('Blob storage unavailable');
-    }
+    return getStore(storeName);
+  }
+
+  // Store data in Netlify Blobs
+  async storeBlob(key: string, data: Buffer | string, metadata?: Record<string, any>): Promise<void> {
+    const store = this.getStoreInstance();
+    await store.set(key, data, { metadata });
+  }
+
+  // Get data from Netlify Blobs as ArrayBuffer
+  async getBlob(key: string): Promise<ArrayBuffer | null> {
+    const store = this.getStoreInstance();
+    const entry = await store.get(key, { type: 'arrayBuffer' });
+    return entry;
+  }
+
+  // Get data as text from Netlify Blobs
+  async getBlobAsText(key: string): Promise<string | null> {
+    const store = this.getStoreInstance();
+    const entry = await store.get(key, { type: 'text' });
+    return entry;
+  }
+
+  // Get data as JSON from Netlify Blobs
+  async getBlobAsJson(key: string): Promise<any> {
+    const store = this.getStoreInstance();
+    const entry = await store.get(key, { type: 'json' });
+    return entry;
+  }
+
+  // Get data with metadata from Netlify Blobs
+  async getBlobWithMetadata(key: string): Promise<{ data: ArrayBuffer; metadata: any; etag: string } | null> {
+    const store = this.getStoreInstance();
+    const entry = await store.getWithMetadata(key, { type: 'arrayBuffer' });
+    if (!entry) return null;
+    return {
+      data: entry.data,
+      metadata: entry.metadata || {},
+      etag: entry.etag || ''
+    };
+  }
+
+  // Delete data from Netlify Blobs
+  async deleteBlob(key: string): Promise<void> {
+    const store = this.getStoreInstance();
+    await store.delete(key);
+  }
+
+  // List blobs in store
+  async listBlobs(prefix?: string): Promise<{ blobs: Array<{ etag: string; key: string }>; directories: string[] }> {
+    const store = this.getStoreInstance();
+    return await store.list({ prefix });
   }
 
   // Chunked Upload Management
