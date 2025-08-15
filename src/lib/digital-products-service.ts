@@ -22,7 +22,7 @@ export interface UploadSession {
   storagePrefix: string;
   chunkSize: number;
   expectedChunks: number;
-  uploadedChunks: Set<number>;
+  uploadedChunks: number[];
   createdAt: Date;
 }
 
@@ -144,7 +144,7 @@ export class DigitalProductsService {
       storagePrefix,
       chunkSize,
       expectedChunks,
-      uploadedChunks: new Set(),
+      uploadedChunks: [],
       createdAt: new Date(),
     };
 
@@ -181,7 +181,9 @@ export class DigitalProductsService {
     await chunkStore.set(chunkKey, chunkData);
 
     // Update session with uploaded chunk
-    sessionData.uploadedChunks.add(chunkIndex);
+    if (!sessionData.uploadedChunks.includes(chunkIndex)) {
+      sessionData.uploadedChunks.push(chunkIndex);
+    }
     await store.setJSON(uploadId, sessionData);
 
     return { success: true, chunkHash };
