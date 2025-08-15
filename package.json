@@ -49,6 +49,7 @@
     "axios": "^1.10.0",
     "axios-retry": "^3.9.1",
     "bcryptjs": "^3.0.2",
+    "busboy": "^1.6.0",
     "clsx": "^2.1.1",
     "cookie": "^0.6.0",
     "drizzle-orm": "^0.44.2",
@@ -77,6 +78,7 @@
   "devDependencies": {
     "@types/axios": "^0.14.0",
     "@types/bcryptjs": "^2.4.6",
+    "@types/busboy": "^1.5.4",
     "@types/cookie": "^0.6.0",
     "@types/jest": "^29.5.10",
     "@types/jsonwebtoken": "^9.0.2",
