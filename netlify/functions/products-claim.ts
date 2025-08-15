@@ -91,7 +91,7 @@ async function handleMockRequest(event: any) {
     };
   }
 
-  const { transferId, productId, recipientAilockId, keyId } = claimPayload;
+  const { transferId, productId, recipientAilockId } = claimPayload;
 
   // Generate download access token (shorter TTL for actual downloads)
   const downloadToken = jwt.sign(

@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { db } from '../../src/lib/db';
 import { productTransfers, productKeys, digitalProducts, ailocks } from '../../src/lib/schema';
 import { eq, and } from 'drizzle-orm';
-import { digitalProductsService } from '../../src/lib/digital-products-service';
+import { DigitalProductsService } from '../../src/lib/digital-products-service';
 
 const headersBase = {
   'Access-Control-Allow-Origin': '*',
@@ -17,6 +17,7 @@ interface GrantRequest {
 }
 
 export const handler: Handler = async (event) => {
+  const digitalProductsService = new DigitalProductsService();
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,

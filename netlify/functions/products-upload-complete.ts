@@ -1,6 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { getAuthTokenFromHeaders, verifyToken } from '../../src/lib/auth/auth-utils';
-import { digitalProductsService } from '../../src/lib/digital-products-service';
+import { DigitalProductsService } from '../../src/lib/digital-products-service';
 import type { ChunkManifest } from '../../src/lib/digital-products-service';
 
 const headersBase = {
@@ -10,6 +10,7 @@ const headersBase = {
 };
 
 export const handler: Handler = async (event) => {
+  const digitalProductsService = new DigitalProductsService();
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,

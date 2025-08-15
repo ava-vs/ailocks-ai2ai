@@ -1,5 +1,5 @@
 import type { Handler } from '@netlify/functions';
-import { digitalProductsService } from '../../src/lib/digital-products-service';
+import { DigitalProductsService } from '../../src/lib/digital-products-service';
 
 const headersBase = {
   'Access-Control-Allow-Origin': '*',
@@ -8,6 +8,7 @@ const headersBase = {
 };
 
 export const handler: Handler = async (event) => {
+  const digitalProductsService = new DigitalProductsService();
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,

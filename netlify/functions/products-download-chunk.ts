@@ -1,6 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { getAuthTokenFromHeaders, verifyToken } from '../../src/lib/auth/auth-utils';
-import { digitalProductsService } from '../../src/lib/digital-products-service';
+import { DigitalProductsService } from '../../src/lib/digital-products-service';
 
 const headersBase = {
   'Access-Control-Allow-Origin': '*',
@@ -9,6 +9,7 @@ const headersBase = {
 };
 
 export const handler: Handler = async (event) => {
+  const digitalProductsService = new DigitalProductsService();
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
@@ -32,7 +33,7 @@ export const handler: Handler = async (event) => {
     if (isMockMode) {
       return handleMockRequest(event);
     } else {
-      return handleRealRequest(event);
+      return handleRealRequest(event, digitalProductsService);
     }
     
   } catch (error) {
@@ -97,7 +98,7 @@ async function handleMockRequest(event: any) {
 }
 
 // Real implementation with database and storage
-async function handleRealRequest(event: any) {
+async function handleRealRequest(event: any, digitalProductsService: DigitalProductsService) {
   // Get claim token from query parameter (primary method)
   const claimToken = event.queryStringParameters?.claim;
   

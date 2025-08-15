@@ -479,5 +479,3 @@ export class DigitalProductsService {
   }
 }
 
-// Export singleton instance
-export const digitalProductsService = new DigitalProductsService();
