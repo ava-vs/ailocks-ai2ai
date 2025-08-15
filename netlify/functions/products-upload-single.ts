@@ -3,7 +3,7 @@ import { db } from '../../src/lib/db';
 import { users, ailocks } from '../../src/lib/schema';
 import { comparePassword } from '../../src/lib/auth/auth-utils';
 import { eq } from 'drizzle-orm';
-import { digitalProductsService } from '../../src/lib/digital-products-service';
+import { DigitalProductsService } from '../../src/lib/digital-products-service';
 import crypto from 'crypto';
 
 const headersBase = {
@@ -29,6 +29,7 @@ const headersBase = {
  * - chunkSize: Size of chunks in bytes (default: 4MB)
  */
 export const handler: Handler = async (event) => {
+  const digitalProductsService = new DigitalProductsService();
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
