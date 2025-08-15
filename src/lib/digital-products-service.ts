@@ -55,7 +55,26 @@ export interface ProductTransfer {
 
 export class DigitalProductsService {
   private getStoreInstance(storeName: string = 'digital-products'): Store {
-    return getStore(storeName);
+    // For Lambda-compatible functions, we need to provide explicit configuration
+    const siteID = process.env.NETLIFY_SITE_ID;
+    const token = process.env.NETLIFY_API_TOKEN;
+    
+    if (siteID && token) {
+      // Use explicit configuration for Lambda functions
+      return getStore({
+        name: storeName,
+        siteID,
+        token
+      });
+    }
+
+    // Try automatic initialization as fallback
+    try {
+      return getStore(storeName);
+    } catch (error) {
+      console.error('Netlify Blobs initialization failed:', error);
+      throw new Error('Netlify Blobs unavailable. Set NETLIFY_SITE_ID and NETLIFY_API_TOKEN environment variables.');
+    }
   }
 
   // Store data in Netlify Blobs
