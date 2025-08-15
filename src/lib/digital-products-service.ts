@@ -191,8 +191,8 @@ export class DigitalProductsService {
       contentHash,
       encryptionAlgo: 'AES-256-GCM' as const,
       storageType: 'netlify_blobs' as const,
-      storageRef: 'pending', // Will be set during upload completion
       storagePointer: 'pending', // Will be set during upload completion
+      storageRef: 'pending', // Добавлено для соответствия типу, хотя в БД нет этой колонки
       createdAt: new Date(),
       updatedAt: new Date()
     };
