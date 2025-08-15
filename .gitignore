@@ -35,3 +35,9 @@ docs/Go-to-Market Стратегия для MVP Ailocks.md
 docs/Order 1.mp4
 scripts/test-digital-products.sh
 
+scripts/initiate_purchase_artifact.json
+scripts/prepare-sota-content.ps1
+.gitignore
+scripts/test-sota-solutions-complete-flow.ps1
+scripts/test-initiate-sota-solutions-purchase.ps1
+scripts/initiate-sota-solutions-purchase.ps1

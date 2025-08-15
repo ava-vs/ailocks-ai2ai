@@ -24,14 +24,17 @@ Enable secure distribution of digital products (files, audio, video, archives) b
 
 ## 4. Data Model (DB)
 - digital_products(id, owner_ailock_id, title, content_type, size, encryption_algo, content_hash, storage_type, storage_pointer, manifest jsonb, created_at)
-- product_transfers(id, product_id, from_ailock_id, to_ailock_id, price, currency, status enum: offered|invoiced|paid|delivered|acknowledged|disputed|refunded, policy jsonb, created_at, updated_at)
+- product_transfers(id, product_id, from_ailock_id, to_ailock_id, price, currency, status enum: offered|invoiced|paid|delivered|acknowledged|disputed|refunded, policy jsonb, buyer_inputs jsonb, created_at, updated_at)
 - payment_intents(id, provider, provider_ref, amount, currency, status, transfer_id, created_at)
 - product_keys(id, product_id, recipient_ailock_id, key_envelope base64, algo, created_at, expires_at)
 - delivery_receipts(id, transfer_id, client_hash, signature, delivered_at, meta jsonb)
 - content_checks(id, product_id, malware_scan enum, moderation enum, reports jsonb, checked_at)
 
 Policy notes:
-- Default policy: retention=7d, single-recipient, one-time download (configurable), revoke on expiry.
+ - Default policy: retention=7d, single-recipient, one-time download (configurable), revoke on expiry.
+ - Required inputs policy: policy.required_inputs[] describes buyer-provided data to be collected before granting download link.
+   - Schema (per item): { id, label, type: text|textarea|url|file, timing: pre_payment|post_payment_pre_grant, required: boolean, description?, constraints?: { max_len?, mime_types?, max_size_mb? } }
+   - Storage: for type=file, store as attachments with pointers (storage_type, storage_pointer, size, content_type, checksum) linked to transfer; text/url values stored in product_transfers.buyer_inputs.
 
 ## 5. API Endpoints (Netlify Functions)
 - POST /.netlify/functions/products-create — register product metadata/policy
@@ -41,13 +44,20 @@ Policy notes:
 - GET  /.netlify/functions/products-download-manifest — return encrypted manifest for recipient
 - GET  /.netlify/functions/products-download-chunk — return chunk by index (with ACL/TTL and download counters)
 - POST /.netlify/functions/products-offer — send product_offer (via AilockMessageService)
-- POST /.netlify/functions/products-invoice — create/return Stripe checkout link
-- POST /.netlify/functions/payments/stripe-webhook — process Stripe events → mark paid
+- POST /.netlify/functions/products-invoice — create/return Stripe checkout link; if policy.required_inputs with timing=pre_payment are not satisfied for the transfer, respond 422 with { missing_inputs: [...] }
+- POST /.netlify/functions/payments-stripe-webhook — process Stripe events → mark paid
 - POST /.netlify/functions/products-grant — issue delivery ticket (key envelope + claim)
 - GET  /.netlify/functions/products-claim — return access details for recipient (validate ACL/TTL)
 - POST /.netlify/functions/products-ack — delivery receipt (Ed25519-signed)
 - POST /.netlify/functions/products-revoke — revoke access (policy-based)
 - POST /.netlify/functions/products-dispute — open dispute
+
+Requirements & attachments:
+- GET  /.netlify/functions/products-requirements — return required_inputs for a product (and timing)
+- POST /.netlify/functions/transfers-requirements-submit — submit buyer inputs for a transfer (text/url values and references to uploaded files)
+- POST /.netlify/functions/attachments-upload-init — start chunked upload for buyer attachments (returns uploadId, chunkSize, storage prefix, context=transfer)
+- POST /.netlify/functions/attachments-upload-chunk — upload a single chunk {uploadId, index, bytes}
+- POST /.netlify/functions/attachments-upload-complete — finalize attachment upload; returns pointer usable in transfers-requirements-submit
 
 Batch extensions (/.netlify/functions/ailock-batch):
 - init_product_transfer, confirm_payment, get_delivery_ticket, ack_delivery, revoke_access
@@ -56,6 +66,10 @@ Batch extensions (/.netlify/functions/ailock-batch):
 - product_offer, payment_request, payment_confirmed, product_delivery, delivery_receipt, product_revoke, product_dispute
 
 ## 7. Flows
+0) Requirements (if any)
+- Discover: client calls products-requirements. If policy.required_inputs has items with timing=pre_payment, UI collects and submits via transfers-requirements-submit before invoice.
+- Post-payment: if timing=post_payment_pre_grant, collect after webhook paid but before products-grant; grant is gated until inputs are provided/validated.
+
 1) Offer → Invoice
 - Sender registers product; sends product_offer with price/policy.
 - System creates payment_intent; sends payment_request with Stripe link.
@@ -88,7 +102,7 @@ Batch extensions (/.netlify/functions/ailock-batch):
 
 ## 9. Payments (Stripe)
 - Checkout session per transfer; webhook marks transfer paid.
-- On paid → allow products-grant; before paid → deny claim.
+- On paid → if all post_payment_pre_grant requirements are satisfied/validated → allow products-grant; otherwise keep status=paid_pending_inputs and notify buyer to complete inputs. Before paid → deny claim.
 - Refunds via Stripe dashboard/API; sync to status.
 
 ## 10. Storage & Retention
@@ -103,7 +117,7 @@ Batch extensions (/.netlify/functions/ailock-batch):
 
 ## 12. Testing Strategy
 - Unit: crypto wrappers, policy validators, webhook handlers, chunk orchestration (init/chunk/complete), schema validators.
-- Integration: end-to-end happy path (offer→pay→grant→claim→ack), failure cases (expired links, unpaid, wrong recipient, corrupted hash), retries/idempotency.
+- Integration: end-to-end happy path (offer→requirements(if any)→pay→(post-payment requirements if any)→grant→claim→ack), failure cases (expired links, unpaid, missing required inputs, wrong recipient, corrupted hash), retries/idempotency.
 - Load: uploads 200MB; download concurrency; webhook spikes.
 - Security: AV/moderation mocks, signature verification, rate limit tests.
 
