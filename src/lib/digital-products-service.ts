@@ -127,14 +127,19 @@ export class DigitalProductsService {
     manifest: ChunkManifest
   ): Promise<{ success: boolean; productId: string }> {
     const store = this.getStoreInstance('upload-sessions');
-    const sessionData = await store.get(uploadId, { type: 'json' }) as UploadSession | null;
+    const sessionRecord = await store.get(uploadId, { type: 'json' }) as any | null;
     
-    if (!sessionData) {
+    if (!sessionRecord) {
       throw new Error('Upload session not found');
     }
 
     // Verify all chunks are uploaded
-    if (sessionData.uploadedChunks.size !== sessionData.expectedChunks) {
+    const uploadedChunksSet = new Set<number>(
+      Array.isArray(sessionRecord.uploadedChunks)
+        ? sessionRecord.uploadedChunks as number[]
+        : []
+    );
+    if (uploadedChunksSet.size !== sessionRecord.expectedChunks) {
       throw new Error('Not all chunks uploaded');
     }
 
@@ -142,14 +147,15 @@ export class DigitalProductsService {
     await db.update(digitalProducts)
       .set({
         manifest: manifest,
-        storagePointer: sessionData.storagePrefix,
+        storagePointer: sessionRecord.storagePrefix,
+        updatedAt: new Date(),
       })
-      .where(eq(digitalProducts.id, sessionData.productId));
+      .where(eq(digitalProducts.id, sessionRecord.productId));
 
     // Clean up upload session
     await store.delete(uploadId);
 
-    return { success: true, productId: sessionData.productId };
+    return { success: true, productId: sessionRecord.productId };
   }
 
   // Product Management
@@ -192,7 +198,6 @@ export class DigitalProductsService {
       encryptionAlgo: 'AES-256-GCM' as const,
       storageType: 'netlify_blobs' as const,
       storagePointer: 'pending', // Will be set during upload completion
-      storageRef: 'pending', // Добавлено для соответствия типу, хотя в БД нет этой колонки
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -238,6 +243,7 @@ export class DigitalProductsService {
     };
 
     // Выполняем вставку с подготовленными данными
+    // Теперь storageRef удален из схемы, поэтому нет необходимости его исключать
     const [product] = await db.insert(digitalProducts)
       .values(fullInsertValues)
       .returning({ id: digitalProducts.id });

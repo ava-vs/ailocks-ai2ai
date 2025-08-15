@@ -588,7 +588,7 @@ export const digitalProducts = pgTable('digital_products', {
   encryptionAlgo: varchar('encryption_algo', { length: 50 }).default('AES-256-GCM'),
   contentHash: varchar('content_hash', { length: 128 }).notNull(), // SHA-256 of original content
   storageType: varchar('storage_type', { length: 50 }).default('netlify_blobs'),
-  storageRef: varchar('storage_ref', { length: 255 }).notNull(), // blob key or file path
+  // storageRef removed as it doesn't exist in the database
   
   // Расширенные поля из миграции 0013_enhance_digital_products.sql
   description: text('description'),
