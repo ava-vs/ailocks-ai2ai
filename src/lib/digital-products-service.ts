@@ -1,4 +1,4 @@
-import { getDeployStore, getStore, Store } from '@netlify/blobs';
+import { getStore, Store } from '@netlify/blobs';
 import { db } from './db';
 import { digitalProducts, productTransfers, productKeys, paymentIntents, deliveryReceipts, contentChecks } from './schema';
 import { eq, and } from 'drizzle-orm';
@@ -56,7 +56,7 @@ export interface ProductTransfer {
 export class DigitalProductsService {
   private getStoreInstance(storeName: string = 'digital-products'): Store {
     try {
-      return getDeployStore(storeName);
+      return getStore(storeName);
     } catch (error) {
       console.error('Failed to initialize Netlify Blobs store:', error);
       throw new Error('Blob storage unavailable');
