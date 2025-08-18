@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, MapPin, Briefcase, Zap, Rss, Clock, LayoutGrid, Menu, ChevronLeft, ChevronRight, User, Trash2, X } from 'lucide-react';
+import { Search, MapPin, Briefcase, Zap, Rss, Clock, LayoutGrid, Menu, ChevronLeft, ChevronRight, User, Trash2, X, Package, Navigation, FileText, ShoppingBag, Users, DollarSign } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useUserSession } from '../../hooks/useUserSession';
 import { deleteIntent } from '../../lib/api';
 import IntentDetailModal from '../Chat/IntentDetailModal';
+import OrderDetailModal from '../Chat/OrderDetailModal';
 import { useAuth } from '@/hooks/useAuth';
 
 interface Intent {
@@ -23,12 +24,56 @@ interface Intent {
   isOwn?: boolean;
 }
 
+interface Order {
+  id: string;
+  title: string;
+  description: string;
+  milestones: {
+    id?: string;
+    description: string;
+    amount: number;
+    deadline: string;
+    status: 'pending' | 'in-progress' | 'completed';
+  }[];
+  amount: number;
+  currency: string;
+  status: string;
+  progress: number;
+  createdAt: string;
+  // Дополнительные поля для карточки заказа
+  fundingGoal?: number;
+  cashback?: string;
+  minContribution?: number;
+  maxContribution?: number;
+  reportingFrequency?: string;
+  investorRequirements?: string;
+  projectRisks?: string;
+  // Поля для отображения в карточке по макету
+  matchScore?: number; // Процент совпадения (75% match)
+  investorCount?: number; // Количество инвесторов
+  daysLeft?: number; // Количество оставшихся дней
+  author?: {
+    name: string;
+    level?: number;
+    rating?: number;
+    projectCount?: number;
+    avatar?: string;
+    profession?: string;
+  };
+  discussionMessages?: {
+    id: string;
+    author: string;
+    text: string;
+    createdAt: string;
+  }[];
+}
+
 interface IntentPanelProps {
   isExpanded?: boolean;
   setIsRightPanelExpanded?: (expanded: boolean) => void;
 }
 
-type Tab = 'nearby' | 'in-work' | 'my-intents';
+type Tab = 'nearby' | 'in-work' | 'my-intents' | 'my-orders';
 
 export default function IntentPanel({ isExpanded = false, setIsRightPanelExpanded }: IntentPanelProps) {
   const { user: authUser } = useAuth();
@@ -41,12 +86,16 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
   const [intents, setIntents] = useState<Intent[]>([]);
   const [inWorkIntents, setInWorkIntents] = useState<Intent[]>([]);
   const [myIntents, setMyIntents] = useState<Intent[]>([]);
+  const [myOrders, setMyOrders] = useState<any[]>([]);
   const [isLoadingIntents, setIsLoadingIntents] = useState(true);
   const [searchQuery, setSearchQuery] = useState<string | null>(null);
   const [dbStatus, setDbStatus] = useState<'connected' | 'error' | 'checking'>('checking');
   const [loadingMyIntents, setLoadingMyIntents] = useState(false);
+  const [loadingMyOrders, setLoadingMyOrders] = useState(false);
   const [loadingInWork, setLoadingInWork] = useState(false);
   const [selectedIntent, setSelectedIntent] = useState<Intent | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
 
   // Effect to detect реальную смену userId после начальной загрузки
   useEffect(() => {
@@ -60,6 +109,7 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
   const [newNearbyCount, setNewNearbyCount] = useState(0);
   const [newInWorkCount, setNewInWorkCount] = useState(0);
   const [newMyIntentsCount, setNewMyIntentsCount] = useState(0);
+  const [newMyOrdersCount, setNewMyOrdersCount] = useState(0);
   const [deletingIntentId, setDeletingIntentId] = useState<string | null>(null);
 
   // Modal state
@@ -79,8 +129,37 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
       } catch (err) {
         console.warn('Failed to load persisted In-Work intents:', err);
       }
+      
+      // Load user orders when user changes
+      loadMyOrders();
     }
   }, [displayUser?.id]);
+  
+  // Function to load user orders
+  const loadMyOrders = async () => {
+    if (!displayUser?.id || displayUser.id === 'loading') return;
+    
+    setLoadingMyOrders(true);
+    try {
+      const response = await fetch('/.netlify/functions/escrow-get-user-orders', {
+        method: 'GET',
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to load orders');
+      }
+      
+      const data = await response.json();
+      setMyOrders(data.orders || []);
+      setNewMyOrdersCount(0); // Reset counter after viewing
+    } catch (error) {
+      console.error('Failed to load orders:', error);
+      toast.error('Could not load your orders.');
+    } finally {
+      setLoadingMyOrders(false);
+    }
+  };
 
   // Helper to persist
   const persistInWork = (updated: Intent[]) => {
@@ -305,6 +384,50 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
     };
   }, [handleSearchResults, handleVoiceSearchResults, handleIntentInWork]);
 
+  useEffect(() => {
+    // Загрузка интентов при инициализации
+    fetchIntents();
+    fetchMyIntents();
+    fetchInWorkIntents();
+    
+    // Обработчик события для переключения на вкладку "My Orders"
+    const handleSwitchToMyOrders = (event: CustomEvent) => {
+      setActiveTab('my-orders');
+      loadMyOrders();
+      
+      // Если в событии передан ID заказа, можно выполнить дополнительные действия
+      const orderId = event.detail?.orderId;
+      if (orderId) {
+        console.log('Переключение на заказ с ID:', orderId);
+        // Здесь можно добавить логику для выделения заказа с указанным ID
+      }
+    };
+    
+    // Добавляем слушатель события
+    window.addEventListener('switch-to-my-orders', handleSwitchToMyOrders as EventListener);
+    
+    // Удаляем слушатель при размонтировании компонента
+    return () => {
+      window.removeEventListener('switch-to-my-orders', handleSwitchToMyOrders as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleOrderCreated = () => {
+      console.log('🔔 Событие order-created получено в IntentPanel');
+      loadMyOrders();
+      // Автоматически переключаемся на вкладку My Orders для отображения нового заказа
+      setActiveTab('my-orders');
+      console.log('🔄 Переключение на вкладку My Orders после создания заказа');
+    };
+
+    window.addEventListener('order-created', handleOrderCreated);
+
+    return () => {
+      window.removeEventListener('order-created', handleOrderCreated);
+    };
+  }, []);
+
   // Reset new item counter when switching tabs
   useEffect(() => {
     if (activeTab === 'nearby') {
@@ -493,70 +616,94 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
 
   const Tabs = () => (
     <div className="flex border-b border-slate-700/60 mb-4">
-      <div className="flex-1 flex justify-between px-1">
+      <div className="w-full flex justify-between px-6">
         <button
           onClick={() => setActiveTab('nearby')}
-          className={`px-3 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+          className={`p-3 w-16 h-16 rounded-lg transition-colors flex items-center justify-center relative ${
             activeTab === 'nearby'
-              ? 'bg-slate-700/50 text-white'
-              : 'text-slate-400 hover:text-white'
+              ? 'bg-slate-700/70 text-white'
+              : 'text-slate-400 hover:bg-slate-700/30 hover:text-white'
           }`}
+          title="Nearby - Find intents around your location"
+          aria-label="Nearby"
         >
-          <span className="relative">
-            Nearby
-            {newNearbyCount > 0 && (
-              <span className="absolute -top-1 -right-5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
-                {newNearbyCount > 9 ? '9+' : newNearbyCount}
-              </span>
-            )}
-          </span>
+          <Navigation size={24} />
+          {newNearbyCount > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
+              {newNearbyCount > 9 ? '9+' : newNearbyCount}
+            </span>
+          )}
         </button>
+        
         <button
           onClick={() => setActiveTab('in-work')}
-          className={`px-3 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+          className={`p-3 w-16 h-16 rounded-lg transition-colors flex items-center justify-center relative ${
             activeTab === 'in-work'
-              ? 'bg-slate-700/50 text-white'
-              : 'text-slate-400 hover:text-white'
+              ? 'bg-slate-700/70 text-white'
+              : 'text-slate-400 hover:bg-slate-700/30 hover:text-white'
           }`}
+          title="In Work - Intents currently in progress"
+          aria-label="In Work"
         >
-          <div className="flex items-center gap-2">
-            <span className="relative">In Work</span>
-            {inWorkIntents.length > 0 && (
-              <span className="bg-blue-500/50 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                {inWorkIntents.length}
-              </span>
-            )}
-            {newInWorkCount > 0 && (
-              <span className="absolute -top-1 -right-5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
-                {newInWorkCount > 9 ? '9+' : newInWorkCount}
-              </span>
-            )}
-          </div>
+          <Briefcase size={24} />
+          {inWorkIntents.length > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600/90 text-xs font-bold text-white shadow-sm">
+              {inWorkIntents.length > 99 ? '99+' : inWorkIntents.length}
+            </span>
+          )}
+          {newInWorkCount > 0 && (
+            <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 border border-slate-800">
+              <span className="sr-only">{newInWorkCount} new items</span>
+            </span>
+          )}
         </button>
+        
         <button
           onClick={() => setActiveTab('my-intents')}
-          className={`px-3 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+          className={`p-3 w-16 h-16 rounded-lg transition-colors flex items-center justify-center relative ${
             activeTab === 'my-intents'
-              ? 'bg-slate-700/50 text-white'
-              : 'text-slate-400 hover:text-white'
+              ? 'bg-slate-700/70 text-white'
+              : 'text-slate-400 hover:bg-slate-700/30 hover:text-white'
           }`}
+          title="My Intents - Intents you have created"
+          aria-label="My Intents"
         >
-          <div className="flex items-center gap-2">
-            <span className="relative">My Intents</span>
-            {myIntents.length > 0 && (
-              <span className="bg-green-500/50 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                {myIntents.length}
-              </span>
-            )}
-            {newMyIntentsCount > 0 && (
-              <span className="absolute -top-1 -right-5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
-                {newMyIntentsCount > 9 ? '9+' : newMyIntentsCount}
-              </span>
-            )}
-          </div>
+          <FileText size={24} />
+          {myIntents.length > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600/90 text-xs font-bold text-white shadow-sm">
+              {myIntents.length > 99 ? '99+' : myIntents.length}
+            </span>
+          )}
+          {newMyIntentsCount > 0 && (
+            <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 border border-slate-800">
+              <span className="sr-only">{newMyIntentsCount} new items</span>
+            </span>
+          )}
+        </button>
+        
+        <button
+          onClick={() => setActiveTab('my-orders')}
+          className={`p-3 w-16 h-16 rounded-lg transition-colors flex items-center justify-center relative ${
+            activeTab === 'my-orders'
+              ? 'bg-slate-700/70 text-white'
+              : 'text-slate-400 hover:bg-slate-700/30 hover:text-white'
+          }`}
+          title="My Orders - Orders you have placed"
+          aria-label="My Orders"
+        >
+          <ShoppingBag size={24} />
+          {myOrders.length > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-violet-600/90 text-xs font-bold text-white shadow-sm">
+              {myOrders.length > 99 ? '99+' : myOrders.length}
+            </span>
+          )}
+          {newMyOrdersCount > 0 && (
+            <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 border border-slate-800">
+              <span className="sr-only">{newMyOrdersCount} new items</span>
+            </span>
+          )}
         </button>
       </div>
-      {/* Верхние кнопки меню были убраны по требованию */}
     </div>
   );
 
@@ -613,14 +760,13 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
   );
 
   const formatTimeAgo = (dateString: string) => {
-    const date = new Date(dateString);
     const now = new Date();
+    const date = new Date(dateString);
     const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
     let interval = seconds / 31536000;
     if (interval > 1) return Math.floor(interval) + "y ago";
     interval = seconds / 2592000;
-    if (interval > 1) return Math.floor(interval) + "m ago";
+    if (interval > 1) return Math.floor(interval) + "mo ago";
     interval = seconds / 86400;
     if (interval > 1) return Math.floor(interval) + "d ago";
     interval = seconds / 3600;
@@ -630,22 +776,136 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
     return "just now";
   };
 
+  // Order card component
+  const OrderCard = ({ order }: { order: Order }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    
+    // Function to open order modal
+    const openOrderModal = () => {
+      setSelectedOrder(order);
+      setIsOrderModalOpen(true);
+    };
+    
+    // Calculate funding percentage
+    const fundingPercentage = order.fundingGoal ? Math.round((order.amount / order.fundingGoal) * 100) : 60;
+    
+    return (
+      <div className="cursor-pointer bg-slate-800/50 border border-slate-700/50 rounded-lg p-3.5 mb-3 hover:border-purple-600/80 transition-colors duration-200">
+        {/* Card header */}
+        <div onClick={() => setIsExpanded(!isExpanded)} className="flex justify-between items-start mb-2">
+          <h4 className="text-sm font-semibold text-white/90 leading-tight flex-1 pr-2">
+            {order.title}
+          </h4>
+          <div className="flex items-center gap-2">
+            <div className={`flex items-center space-x-1 px-2 py-1 rounded-md text-xs font-bold ${order.matchScore ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' : order.status === 'in-progress' ? 'bg-[rgb(34,197,94)]/20 text-[rgb(34,197,94)] border-[rgb(34,197,94)]/30' : 'bg-blue-500/20 text-blue-400 border-blue-500/30'}`}>
+              {order.matchScore ? `${order.matchScore}% match` : order.status}
+            </div>
+          </div>
+        </div>
+        
+        {/* Description */}
+        <p className="text-xs text-slate-400 mb-3 leading-snug">
+          {order.description.substring(0, 100)}{order.description.length > 100 ? '...' : ''}
+        </p>
+        
+        {/* Order info */}
+        <div className="flex items-center justify-between mb-3 text-xs">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-3 h-3 text-slate-500" />
+            <span className="text-slate-400">International</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Users className="w-3 h-3 text-slate-500" />
+            <span className="text-slate-400">{order.investorCount || 24} investors</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <DollarSign className="w-3 h-3 text-slate-500" />
+            <span className="text-slate-400">${order.minContribution || 200}+</span>
+          </div>
+        </div>
+        
+        {/* Funding progress */}
+        <div className="flex items-center justify-between mb-1 text-xs">
+          <span className="font-bold text-white">${order.amount || 4800}</span>
+          <span className="text-slate-400">of ${order.fundingGoal || 8000}</span>
+        </div>
+        
+        {/* Progress bar */}
+        <div className="w-full bg-slate-700/50 rounded-full h-2 mb-3">
+          <div 
+            className="bg-gradient-to-r from-purple-600 to-blue-500 h-2 rounded-full" 
+            style={{ width: `${fundingPercentage}%` }}
+          ></div>
+        </div>
+        
+        {/* Action buttons */}
+        <div className="flex justify-between gap-2">
+          <button 
+            onClick={() => openOrderModal()} 
+            className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-medium py-1.5 px-3 rounded-full text-xs transition-all shadow-sm"
+          >
+            Co-Invest
+          </button>
+          <button 
+            onClick={(e) => { e.stopPropagation(); openOrderModal(); }} 
+            className="bg-gradient-to-r from-sky-600 to-slate-700 hover:from-sky-700 hover:to-slate-800 text-white font-medium py-1.5 px-3 rounded-full text-xs transition-all shadow-sm"
+          >
+            Details
+          </button>
+        </div>
+        
+        {/* Expanded view with milestones */}
+        {isExpanded && (
+          <div className="mt-4 pt-3 border-t border-slate-700/50">
+            <h5 className="text-xs font-semibold text-white/80 mb-2">Milestones:</h5>
+            <div className="space-y-2">
+              {order.milestones.map((milestone, index) => (
+                <div key={index} className="text-xs bg-slate-800/80 p-2 rounded border border-slate-700/50">
+                  <div className="flex justify-between mb-1">
+                    <span className="text-white/80">{milestone.description}</span>
+                    <span className="text-purple-400">{order.currency} {milestone.amount}</span>
+                  </div>
+                  <div className="text-slate-500">Deadline: {new Date(milestone.deadline).toLocaleDateString()}</div>
+                </div>
+              ))}
+            </div>
+            
+            <div className="mt-3 flex justify-end">
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation(); // Prevent event bubbling
+                  openOrderModal();
+                }} 
+                className="text-xs bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded transition-colors"
+              >
+                View Details
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const EmptyState = ({tab}: {tab: Tab}) => (
     <div className="text-center py-10 px-4">
       <div className="w-12 h-12 bg-slate-800 border border-slate-700 rounded-full mx-auto flex items-center justify-center mb-4">
-        {tab === 'nearby' && <Search className="w-6 h-6 text-slate-500" />}
+        {tab === 'nearby' && <MapPin className="w-6 h-6 text-slate-500" />}
         {tab === 'in-work' && <Briefcase className="w-6 h-6 text-slate-500" />}
         {tab === 'my-intents' && <User className="w-6 h-6 text-slate-500" />}
+        {tab === 'my-orders' && <Package className="w-6 h-6 text-slate-500" />}
       </div>
       <h4 className="font-semibold text-white">
         {tab === 'nearby' && 'No Local Intents'}
         {tab === 'in-work' && 'No Intents In Work'}
         {tab === 'my-intents' && 'No My Intents'}
+        {tab === 'my-orders' && 'No Orders Found'}
       </h4>
       <p className="text-sm text-slate-400 mt-1">
         {tab === 'nearby' && 'Try a broader search in the chat.'}
         {tab === 'in-work' && 'Start work on an intent to see it here.'}
         {tab === 'my-intents' && 'Create your first intent in the chat.'}
+        {tab === 'my-orders' && 'Create your first order in the chat.'}
       </p>
     </div>
   );
@@ -700,6 +960,13 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
                 </div>
               ) : <EmptyState tab="my-intents" />
             )}
+            {activeTab === 'my-orders' && (
+              loadingMyOrders ? <LoadingSkeleton /> : myOrders.length > 0 ? (
+                <div className="space-y-3">
+                  {myOrders.map(order => <OrderCard key={order.id} order={order} />)}
+                </div>
+              ) : <EmptyState tab="my-orders" />
+            )}
           </div>
         )}
       </div>
@@ -728,6 +995,13 @@ export default function IntentPanel({ isExpanded = false, setIsRightPanelExpande
         onStartWork={(intent) => handleStartWork(intent)}
         intent={selectedIntent ? { ...selectedIntent, skills: (selectedIntent as any).skills || selectedIntent.requiredSkills } as any : null}
         alreadyInWork={!!selectedIntent && inWorkIntents.some(i => i.id === selectedIntent.id)}
+      />
+      
+      {/* Order detail modal */}
+      <OrderDetailModal
+        isOpen={isOrderModalOpen}
+        onClose={() => setIsOrderModalOpen(false)}
+        order={selectedOrder}
       />
     </div>
   );
