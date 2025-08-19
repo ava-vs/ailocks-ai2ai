@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, Plus, MapPin, Eye, Mic } from 'lucide-react';
+import { Send, Bot, MapPin, Eye, Package, Plus, Mic } from 'lucide-react';
 import { useStore } from '@nanostores/react';
 import { appState, setMode, setLanguage, type AIMode, type Language } from '../../lib/store';
 import { useUserSession } from '../../hooks/useUserSession';
@@ -7,6 +7,7 @@ import { useLocation } from '../../hooks/useLocation';
 import MessageBubble from './MessageBubble';
 import IntentPreview from './IntentPreview';
 import OrderPreview from './OrderPreview';
+import OrderConfirmationCard from './OrderConfirmationCard';
 import LevelUpModal from '../Ailock/LevelUpModal';
 import { searchIntents } from '../../lib/api';
 import toast from 'react-hot-toast';
@@ -74,6 +75,9 @@ export default function ChatInterface() {
   const [isOrderPreviewVisible, setIsOrderPreviewVisible] = useState(false);
   const [orderPreviewData, setOrderPreviewData] = useState<any>(null);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [createdOrderData, setCreatedOrderData] = useState<any>(null);
+  const [showOrderConfirmation, setShowOrderConfirmation] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [lastUserMessage, setLastUserMessage] = useState<string>('');
   const [ailockStatus, setAilockStatus] = useState<'unknown' | 'available' | 'unavailable'>('unknown');
   const [ailockId, setAilockId] = useState<string | null>(null);
@@ -1057,9 +1061,42 @@ export default function ChatInterface() {
 
       const result = await response.json();
       toast.dismiss();
-      toast.success(`Order created successfully! Order ID: ${result.id}`);
+      // toast.success удален для устранения дублирования с OrderConfirmationCard
+      
+      // Сохраняем данные о созданном заказе для отображения карточки
+      const createdOrder = {
+        ...payload,
+        id: result.id,
+        status: 'pending',
+        progress: 0,
+        createdAt: new Date().toISOString()
+      };
+      
+      // Отладочные сообщения для проверки данных заказа
+      console.log('Созданный заказ:', createdOrder);
+      console.log('Milestones:', createdOrder.milestones);
+      
+      setCreatedOrderData(createdOrder);
+      setShowOrderConfirmation(true);
+      
+      // Отладочное сообщение для проверки состояния
+      console.log('showOrderConfirmation установлен в true');
+      
+      // Генерируем событие для обновления списка заказов в IntentPanel
+      window.dispatchEvent(new CustomEvent('order-created'));
+      
+      // Скрываем предпросмотр заказа
       setIsOrderPreviewVisible(false);
       setOrderPreviewData(null);
+      
+      // Автоматически скрываем карточку подтверждения через 15 секунд
+      setTimeout(() => {
+        setShowOrderConfirmation(false);
+        console.log('showOrderConfirmation установлен в false через таймаут');
+      }, 15000);
+      
+      // Сохраняем ID созданного заказа для возможности просмотра деталей
+      setSelectedOrderId(result.id);
     } catch (error: any) {
       console.error('Error creating order:', error);
       toast.dismiss();
@@ -1072,6 +1109,40 @@ export default function ChatInterface() {
   const handleCancelOrder = () => {
     setIsOrderPreviewVisible(false);
     setOrderPreviewData(null);
+  };
+  
+  // Обработчик для просмотра деталей заказа
+  const handleViewOrderDetails = () => {
+    console.log('View order details:', selectedOrderId || createdOrderData?.id);
+    
+    // Если есть данные о заказе, устанавливаем ID для просмотра
+    if (createdOrderData?.id && !selectedOrderId) {
+      setSelectedOrderId(createdOrderData.id);
+    }
+    
+    // Здесь можно добавить логику для открытия модального окна с деталями заказа
+    // Например, можно использовать существующий компонент OrderDetailModal
+    toast.success('View order details: ' + (selectedOrderId || createdOrderData?.id));
+    
+    // Закрываем карточку подтверждения
+    setShowOrderConfirmation(false);
+  };
+  
+  // Обработчик для перехода к списку заказов
+  const handleGoToOrders = () => {
+    console.log('Переход к списку заказов');
+    
+    // Закрываем карточку подтверждения
+    setShowOrderConfirmation(false);
+    
+    // Генерируем событие для переключения на вкладку "My Orders" в IntentPanel
+    // Передаем ID заказа в событии, если он есть
+    const event = new CustomEvent('switch-to-my-orders', { 
+      detail: { orderId: selectedOrderId || createdOrderData?.id } 
+    });
+    window.dispatchEvent(event);
+    
+    toast.success('Going to orders list');
   };
 
   const handleOrderDataChange = (updatedData: any) => {
@@ -1421,12 +1492,24 @@ export default function ChatInterface() {
       )}
 
       {showIntentPreview && intentPreview && (
-        <IntentPreview
-          {...intentPreview}
-          onConfirm={handleConfirmIntent}
-          onCancel={() => setShowIntentPreview(false)}
-          onDataChange={handleIntentPreviewChange}
-          isLoading={isCreatingIntent}
+        <div className="mb-6">
+          <IntentPreview
+            {...intentPreview}
+            onConfirm={handleConfirmIntent}
+            onCancel={handleCancelIntent}
+            onDataChange={handleIntentPreviewChange}
+            isLoading={isCreatingIntent}
+          />
+        </div>
+      )}
+      
+      {/* Карточка подтверждения заказа */}
+      {showOrderConfirmation && createdOrderData && (
+        <OrderConfirmationCard
+          order={createdOrderData}
+          onClose={() => setShowOrderConfirmation(false)}
+          onViewDetails={handleViewOrderDetails}
+          onGoToOrders={handleGoToOrders}
         />
       )}
 

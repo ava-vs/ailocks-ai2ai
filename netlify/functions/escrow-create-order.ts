@@ -6,6 +6,7 @@ import type { GroupOrderPayload, OrderPayload } from "../../src/lib/services/esc
 import { db } from '../../src/lib/db';
 import { users, escrowUserLinks } from '../../src/lib/schema';
 import { eq } from 'drizzle-orm';
+import { addCreatedOrder } from './escrow-get-user-orders';
 
 /**
  * English comment: Helper function to create a standardized JSON response with CORS headers.
@@ -134,6 +135,9 @@ export const handler: Handler = async (event: HandlerEvent) => {
       console.log('Escrow Create Group Order Payload (Multiple Customers):', payload);
       newOrder = await escrowClient.createGroupOrder(payload, token);
     }
+
+    // English comment: Add the created order to the in-memory store for immediate UI update.
+    addCreatedOrder(newOrder);
 
     // 5. Return the successful response
     return {
